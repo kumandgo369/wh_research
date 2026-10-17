@@ -15,7 +15,7 @@ from wh_research.data.hyperliquid.candles import (
     BAR_MS,
     COLUMNS,
     MAX_ATTEMPTS,
-    START_TIME_MS,
+    MAX_BARS,
     candles_filename,
     download_with_retry,
     first_missing_bar_ms,
@@ -27,6 +27,8 @@ from wh_research.data.hyperliquid.candles import (
 INTERVALS = list(BAR_MS)
 # 2024-01-01 UTC in milliseconds: "bar 0" for all fake data. It is in the past, so bars count as closed
 BAR0_MS = int(datetime(2024, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+# The fake "now": 30 days after the fake data starts, so every fake bar has closed
+NOW_MS = BAR0_MS + 30 * BAR_MS["1d"]
 
 
 def api_bar(symbol, bar_number, interval="1d"):
@@ -111,6 +113,8 @@ def fake_info(monkeypatch):
     fake = FakeInfo()
     # Make candles.Info return our fake instead of connecting to Hyperliquid
     monkeypatch.setattr(candles, "Info", lambda *args, **kwargs: fake)
+    # Freeze the clock at NOW_MS (time.time gives seconds, so divide by 1000)
+    monkeypatch.setattr("time.time", lambda: NOW_MS / 1000)
     # Give the fake to the test so it can change it and inspect its calls
     return fake
 
@@ -204,12 +208,13 @@ def test_retry_gives_up_after_max_attempts():
 
 # --- first_missing_bar_ms -------------------------------------------------
 
-def test_first_missing_bar_for_new_symbol_is_the_global_start():
+@pytest.mark.parametrize("interval", INTERVALS)
+def test_first_missing_bar_for_new_symbol_is_5000_bars_before_now(interval):
     # Arrange: coin A was saved up to 2024-01-03, and "NEW" has never been saved
     last_saved = pd.Series({"A": pd.Timestamp("2024-01-03", tz="UTC")})
 
-    # Assert: a coin we have never saved starts from the global start time
-    assert first_missing_bar_ms("NEW", last_saved, "1d") == START_TIME_MS
+    # Assert: a coin we have never saved starts MAX_BARS bars before "now"
+    assert first_missing_bar_ms("NEW", last_saved, interval, NOW_MS) == NOW_MS - MAX_BARS * BAR_MS[interval]
 
 
 @pytest.mark.parametrize("interval", INTERVALS)
@@ -220,7 +225,7 @@ def test_first_missing_bar_for_saved_symbol_is_the_next_bar(interval):
     last_saved_ms = BAR0_MS + 2 * BAR_MS["1d"]
 
     # Assert: the next missing bar starts exactly one bar length later
-    assert first_missing_bar_ms("A", last_saved, interval) == last_saved_ms + BAR_MS[interval]
+    assert first_missing_bar_ms("A", last_saved, interval, NOW_MS) == last_saved_ms + BAR_MS[interval]
 
 
 # --- update_candles (whole run, using the fake API) -----------------------
@@ -243,6 +248,8 @@ def test_first_run_saves_every_symbol_sorted(fake_info, tmp_path, interval):
     assert saved.equals(sorted_copy)
     # Assert: each coin has its 3 bars
     assert saved.groupby("symbol").size().to_dict() == {"A": 3, "B": 3}
+    # Assert: the first request started MAX_BARS bars before "now"
+    assert fake_info.calls[0][1] == NOW_MS - MAX_BARS * BAR_MS[interval]
 
 
 @pytest.mark.parametrize("interval", INTERVALS)

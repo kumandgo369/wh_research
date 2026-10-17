@@ -12,6 +12,9 @@ Limits:
 - The API serves at most the 5000 most recent candles per symbol and interval.
   That is about 13 years of 1d bars but only about 208 days of 1h bars, so 1h
   history older than that exists only if the update keeps being run.
+- A symbol we have never saved is requested from 5000 bars before now, which is
+  everything the API holds for an active coin. Delisted coins whose last bar is
+  older than that return nothing and are not saved.
 - Rate limited per IP (HTTP 429). download_with_retry backs off and retries.
 
 Update behavior:
@@ -22,8 +25,6 @@ Update behavior:
 
 # time lets us read the clock and pause (sleep) between requests
 import time
-# datetime and timezone let us build the fixed start date below
-from datetime import datetime, timezone
 # Path builds file paths in a way that works on any operating system
 from pathlib import Path
 
@@ -37,8 +38,8 @@ from hyperliquid.utils import constants
 # How long one bar lasts, in milliseconds, for each candle size we support
 BAR_MS = {"1d": 86_400_000, "1h": 3_600_000}
 
-# The first moment we ask for, 2022-01-01 UTC, converted to milliseconds since 1970 (what the API wants)
-START_TIME_MS = int(datetime(2022, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+# The most candles the API ever returns per symbol and interval
+MAX_BARS = 5000
 
 # How many times we try a request before giving up
 MAX_ATTEMPTS = 8
@@ -132,14 +133,14 @@ def load_saved_candles(path):
     return pd.DataFrame(columns=COLUMNS)
 
 
-def first_missing_bar_ms(symbol, last_saved, interval):
+def first_missing_bar_ms(symbol, last_saved, interval, end_ms):
     """Start time (ms) of the first bar we do not have yet for this symbol.
 
     last_saved maps symbol -> open_time of its newest saved bar.
     """
-    # A symbol we have never saved needs everything, starting from the global start date
+    # A symbol we have never saved needs everything the API holds: the last MAX_BARS bars before end_ms
     if symbol not in last_saved.index:
-        return START_TIME_MS
+        return end_ms - MAX_BARS * BAR_MS[interval]
     # Otherwise convert its newest saved time to milliseconds and move forward one bar
     return int(last_saved[symbol].timestamp() * 1000) + BAR_MS[interval]
 
@@ -208,7 +209,7 @@ def update_candles(data_dir: Path, interval: str) -> None:
                 continue
 
             # Work out where this coin's missing bars start
-            start_ms = first_missing_bar_ms(symbol, last_saved, interval)
+            start_ms = first_missing_bar_ms(symbol, last_saved, interval, end_ms)
             # Run the download inside try so one bad coin cannot stop the others
             try:
                 # Download the missing closed bars for this coin

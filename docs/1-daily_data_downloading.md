@@ -23,7 +23,7 @@ Key: `(symbol, open_time)`, sorted by symbol then time, no index. Same columns f
 - **Closed bars only.** The forming bar is dropped.
 - **Raw file kept faithful.** No filtering at download time. See `3-daily_data_cleaning.md`.
 - **Delisted coins included**, to avoid survivorship bias. Their rows are never dropped.
-- **Starts 2022-01-01**, earlier than any real trading.
+- **A new symbol is requested from 5000 bars before now**, which is everything the API holds (for 1d that is before Hyperliquid existed).
 - **History cap.** The API returns at most the 5000 most recent candles per symbol and interval. 1d covers over 13 years, 1h about 208 days, 1m about 3.5 days.
 - **One file per interval.** The interval is a parameter (`"1d"` or `"1h"`), and `BAR_MS` in `candles.py` holds the bar lengths.
 

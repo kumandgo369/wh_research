@@ -19,9 +19,9 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_retry_succeeds_after_two_429s_and_waits_longer_each_time` | Retries after "too many requests", waiting 5s then 10s |
 | `test_retry_does_not_retry_other_errors` | Any other error is raised straight away |
 | `test_retry_gives_up_after_max_attempts` | Gives up after `MAX_ATTEMPTS` rate-limit errors |
-| `test_first_missing_bar_for_new_symbol_is_the_global_start` | A new symbol starts from `START_TIME_MS` |
+| `test_first_missing_bar_for_new_symbol_is_5000_bars_before_now` (both intervals) | A new symbol starts `MAX_BARS` bars before "now" |
 | `test_first_missing_bar_for_saved_symbol_is_the_next_bar` (both intervals) | A saved symbol continues from its last bar + one bar |
-| `test_first_run_saves_every_symbol_sorted` (both intervals) | First run saves all symbols into the interval's file, sorted by symbol then time |
+| `test_first_run_saves_every_symbol_sorted` (both intervals) | First run saves all symbols into the interval's file, sorted by symbol then time, starting `MAX_BARS` bars before "now" |
 | `test_second_run_fetches_only_new_bars_and_skips_delisted` (both intervals) | Update asks only for new bars, never re-fetches a saved delisted coin, and creates no duplicates |
 | `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
 | `test_unsupported_interval_is_rejected` | An interval like `5m` raises a clear error before any request |
@@ -44,7 +44,7 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 - `RateLimitedInfo(failures=n)` raises a 429 error `n` times, then answers.
 - The `fake_info` fixture swaps `candles.Info` for `FakeInfo`.
 - The `sleeps` fixture (applied to every test) replaces `time.sleep`, so retries are instant, and records the waits so tests can check them.
-- The 2024 test dates are in the past, so every fake bar counts as closed.
+- The `fake_info` fixture also freezes `time.time` at `NOW_MS`, 30 days after the fake data starts, so every fake bar counts as closed and "5000 bars before now" is predictable.
 
 ## Adding a test
 
