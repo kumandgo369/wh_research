@@ -1,4 +1,3 @@
-
 # Hyperliquid daily candle data
 
 ## Summary
@@ -6,7 +5,7 @@
 - **Source:** Hyperliquid `candles_snapshot`, interval `1d`, perps only.
 - **Code:** `src/wh_research/data/hyperliquid/candles_1d.py`
 - **Runner:** `scripts/update_hyperliquid_candles_1d.py`
-- **Output:** `data/hyperliquid/candles_1d.parquet` (gitignored)
+- **Output:** `data/hyperliquid/candles_1d.parquet`
 
 ## Usage
 
