@@ -30,6 +30,7 @@ All tests run offline and in about a second. Nothing touches the network or your
 | `test_each_validity_rule` | Each OHLCV rule flags its bad row, and no row is dropped |
 | `test_stale_needs_more_than_three_equal_closes` | 3 equal closes are fine, 4 are stale |
 | `test_stale_run_does_not_cross_symbols` | A flat price at the end of one coin does not carry into the next |
+| `test_after_gap_flags_first_bar_after_missing_days` | Only the bar right after a missing day is flagged, and the first bar of a coin never is |
 | `test_update_candles_1d_cleaned_writes_file` | The cleaned parquet is written with the flag columns |
 
 ## How the downloader tests avoid the network

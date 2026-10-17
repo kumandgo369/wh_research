@@ -91,6 +91,18 @@ def test_stale_run_does_not_cross_symbols():
     assert not out["is_stale"].any()
 
 
+def test_after_gap_flags_first_bar_after_missing_days():
+    # Arrange: coin A has days 0, 1 and 3 (day 2 is missing), and coin B has days 0 and 1 (no gap)
+    df = make_df(
+        [flat_bar("A", day, 1.0 + day) for day in [0, 1, 3]]
+        + [flat_bar("B", day, 1.0 + day) for day in [0, 1]]
+    )
+    # Act: run the cleaning
+    out = clean_candles_1d(df)
+    # Assert: only coin A's day 3 bar (the one right after the gap) is flagged
+    assert list(out["after_gap"]) == [False, False, True, False, False]
+
+
 def test_update_candles_1d_cleaned_writes_file(tmp_path):
     # Arrange: save a tiny raw candles file (3 bars with different prices) in a temporary folder
     make_df([flat_bar("A", i, 1.0 + i) for i in range(3)]).to_parquet(tmp_path / "candles_1d.parquet")

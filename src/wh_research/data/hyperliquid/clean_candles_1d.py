@@ -65,6 +65,12 @@ def clean_candles_1d(df):
     # A bar is stale when it belongs to a run longer than STALE_BARS
     df["is_stale"] = run_length > STALE_BARS
 
+    # Step 3: gap detector. Flags the first bar after one or more missing days.
+    # Get the time between each bar and the previous bar of the same coin (the first bar gets nothing)
+    time_since_previous = df.groupby("symbol")["open_time"].diff()
+    # More than one day since the previous bar means days are missing (a missing value counts as False)
+    df["after_gap"] = time_since_previous > pd.Timedelta(days=1)
+
     # Hand the table back, with the new check columns added
     return df
 
@@ -86,5 +92,6 @@ def update_candles_1d_cleaned(data_dir):
     df.to_parquet(tmp, index=False)
     # Swap the temporary file in only after it was fully written, so a crash can't corrupt the real file
     tmp.replace(path)
-    # Print a summary: total rows, how many are stale, and how many failed a check (~ means "not")
-    print(f"saved {len(df)} rows, {df['is_stale'].sum()} stale, {(~df['is_valid']).sum()} invalid")
+    # Print a summary: total rows, stale bars, rows that failed a check (~ means "not"), and gaps
+    print(f"saved {len(df)} rows, {df['is_stale'].sum()} stale, {(~df['is_valid']).sum()} invalid, "
+          f"{df['after_gap'].sum()} gaps")
