@@ -9,18 +9,20 @@ Quantitative crypto research repo. Currently it contains one data pipeline: dail
 ## Commands
 
     uv sync                                                  # install deps (incl. dev group: jupyter, pytest)
-    uv run python scripts/update_hyperliquid_candles_1d.py   # first download AND every later update
-    uv run pytest                                            # tests/ is currently empty
-    uv run pytest tests/test_x.py::test_name                 # single test
+    uv run python scripts/update_hyperliquid_candles_1d.py             # first download AND every later update (raw file)
+    uv run python scripts/clean_hyperliquid_candles_1d.py              # rebuild candles_1d_cleaned.parquet from raw
+    uv run python scripts/update_and_clean_hyperliquid_candles_1d.py   # update, then clean
+    uv run pytest                                                      # all tests
+    uv run pytest tests/test_clean_candles_1d.py::test_name            # single test
 
 No linter or formatter is configured.
 
 ## Layout
 
-- `src/wh_research/data/hyperliquid/candles_1d.py` — all downloader logic; `scripts/update_hyperliquid_candles_1d.py` is a thin runner that points it at `data/hyperliquid/`.
-- `data/hyperliquid/candles_1d.parquet` — the dataset. It is committed to git (the "remove data/ from gitignore" commit), although `docs/1-hyperliquid_data.md` still says gitignored. Each update therefore shows up as a modified binary in `git status`.
+- `src/wh_research/data/hyperliquid/candles_1d.py` — all downloader logic; `clean_candles_1d.py` — cleaning (`clean_candles_1d`) and the cleaned-file rebuild (`update_candles_1d_cleaned`). The `scripts/` files are thin runners that point them at `data/hyperliquid/`.
+- `data/hyperliquid/candles_1d.parquet` — the raw dataset, committed to git, so each update shows up as a modified binary. `candles_1d_cleaned.parquet` is derived and gitignored.
 - `notebooks/` — analysis notebooks. `wip/` — scratch notebooks and scripts, gitignored.
-- `docs/1-hyperliquid_data.md` — authoritative description of the dataset: schema, design decisions, quirks, TODOs. Read it before touching the data or writing analysis on it. `docs/research_process.md` is currently empty.
+- `docs/1-daily_data_downloading.md`, `2-daily_data_updating.md`, `3-daily_data_cleaning.md` — the dataset's schema, quirks, update workflow and cleaning flags. Read them before touching the data or writing analysis on it. `docs/research_process.md` is currently empty.
 
 ## Data pipeline: things that span multiple places
 
@@ -28,6 +30,6 @@ No linter or formatter is configured.
 - **Failed symbols are simply absent** (the script does not record them). Rerunning fetches whatever is missing. HTTP 429 is retried with backoff, and the SDK raises exceptions whose `args[0]` is the status code, which is what the retry check inspects.
 - **Delisted symbols** (`isDelisted` in `info.meta()["universe"]`) are kept on disk and never refetched. Do not drop them (survivorship bias).
 - **Closed bars only**: bars with `close_time >= now` are dropped at fetch time.
-- **Raw file is not cleaned.** Leading zero-volume bars exist for many symbols (e.g. BTC has about 420), and some have invalid OHLC. Research code must filter at load time using `first_traded` = first bar with `volume > 0`. The planned `load_candles()` helper that owns this does not exist yet.
+- **Raw file is not cleaned.** Leading zero-volume bars exist for many symbols (e.g. BTC has about 420), and some have invalid OHLC. `clean_candles_1d` trims bars before each symbol's first `volume > 0` bar and adds `ok_*`, `is_valid` and `is_stale` flags without dropping anything else, so the series has no gaps. The cleaned file is always a full rebuild from raw (a new bar can make earlier bars stale), so run clean after update, never alongside.
 - **Look-ahead**: in as-of joins use `close_time`, not `open_time`, as the left key. Funding data (planned) calls the key `coin`; rename it to `symbol`.
 - The interval is deliberately hardcoded to 1d in file, function and constant names. Intraday data should go in a separate module and file layout (see the docs), not into this file.
