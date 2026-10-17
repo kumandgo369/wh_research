@@ -22,7 +22,7 @@ No linter or formatter is configured.
 - `src/wh_research/data/hyperliquid/candles_1d.py` — all downloader logic; `clean_candles_1d.py` — cleaning (`clean_candles_1d`) and the cleaned-file rebuild (`update_candles_1d_cleaned`). The `scripts/` files are thin runners that point them at `data/hyperliquid/`.
 - `data/hyperliquid/candles_1d.parquet` — the raw dataset, committed to git, so each update shows up as a modified binary. `candles_1d_cleaned.parquet` is derived and gitignored.
 - `notebooks/` — analysis notebooks. `wip/` — scratch notebooks and scripts, gitignored.
-- `docs/1-daily_data_downloading.md`, `2-daily_data_updating.md`, `3-daily_data_cleaning.md` — the dataset's schema, quirks, update workflow and cleaning flags. Read them before touching the data or writing analysis on it. `docs/research_process.md` is currently empty.
+- `docs/1-daily_data_downloading.md`, `2-daily_data_updating.md`, `3-daily_data_cleaning.md` — the dataset's schema, quirks, update workflow and cleaning flags. Read them before touching the data or writing analysis on it. `docs/tests.md` lists every test and how the downloader tests fake the API. `docs/research_process.md` is currently empty.
 
 ## Data pipeline: things that span multiple places
 
