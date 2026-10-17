@@ -4,6 +4,7 @@ __pycache__/
 .env
 .ipynb_checkpoints/
 .pytest_cache/
+.ruff_cache/
 .DS_Store
 wip/
 data/hyperliquid/candles_1d_cleaned.parquet
