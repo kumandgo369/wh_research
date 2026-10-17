@@ -17,6 +17,8 @@ Quantitative crypto research repo. Currently it contains one data pipeline: dail
 
 No linter or formatter is configured.
 
+Code style: every code line has a plain-English comment on its own line directly above it, written for a beginner. Keep this when adding or editing code.
+
 ## Layout
 
 - `src/wh_research/data/hyperliquid/candles_1d.py` — all downloader logic; `clean_candles_1d.py` — cleaning (`clean_candles_1d`) and the cleaned-file rebuild (`update_candles_1d_cleaned`). The `scripts/` files are thin runners that point them at `data/hyperliquid/`.
