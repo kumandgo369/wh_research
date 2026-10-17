@@ -1,15 +1,17 @@
-"""Hyperliquid perpetual futures daily candles.
+"""Hyperliquid perpetual futures candles (1d or 1h).
 
-Downloads and incrementally updates daily OHLCV bars for every perp in
-info.meta()["universe"], delisted coins included, into one parquet file.
+Downloads and incrementally updates OHLCV bars for every perp in
+info.meta()["universe"], delisted coins included, into one parquet file per interval.
 
 Scope:
 - Perps only. Spot and builder-deployed (HIP-3) markets are not covered.
-- Closed bars only. The current day's bar is excluded.
-- Raw data. Leading zero-volume bars are kept; see clean_candles_1d.py.
+- Closed bars only. The current bar is excluded.
+- Raw data. Leading zero-volume bars are kept; see clean_candles.py.
 
 Limits:
-- The API serves at most 5000 candles per symbol and interval.
+- The API serves at most the 5000 most recent candles per symbol and interval.
+  That is about 13 years of 1d bars but only about 208 days of 1h bars, so 1h
+  history older than that exists only if the update keeps being run.
 - Rate limited per IP (HTTP 429). download_with_retry backs off and retries.
 
 Update behavior:
@@ -32,15 +34,11 @@ from hyperliquid.info import Info
 # constants holds the official API addresses, such as the main (real money) network
 from hyperliquid.utils import constants
 
-# The candle size we download: one bar per day
-INTERVAL = "1d"
-# The name of the file where the raw candles are saved
-FILENAME = "candles_1d.parquet"
+# How long one bar lasts, in milliseconds, for each candle size we support
+BAR_MS = {"1d": 86_400_000, "1h": 3_600_000}
 
 # The first moment we ask for, 2022-01-01 UTC, converted to milliseconds since 1970 (what the API wants)
 START_TIME_MS = int(datetime(2022, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
-# The number of milliseconds in one day (24 * 60 * 60 * 1000)
-ONE_DAY_MS = 86_400_000
 
 # How many times we try a request before giving up
 MAX_ATTEMPTS = 8
@@ -62,7 +60,13 @@ NUMBER_COLUMNS = ["open", "high", "low", "close", "volume"]
 COLUMNS = ["symbol", "open_time", "close_time"] + NUMBER_COLUMNS + ["trades"]
 
 
-def download_with_retry(info, symbol, start_ms, end_ms):
+def candles_filename(interval):
+    """The name of the raw candles file for an interval, such as candles_1h.parquet."""
+    # Put the interval into the file name
+    return f"candles_{interval}.parquet"
+
+
+def download_with_retry(info, symbol, interval, start_ms, end_ms):
     """Ask the API for candles. If it says 429 (too many requests), wait and retry."""
     # Wait 5 seconds before the first retry
     wait_seconds = 5
@@ -71,7 +75,7 @@ def download_with_retry(info, symbol, start_ms, end_ms):
         # Run the request inside try so we can react if it fails
         try:
             # Ask the API for this symbol's candles and hand back the answer straight away if it works
-            return info.candles_snapshot(symbol, INTERVAL, start_ms, end_ms)
+            return info.candles_snapshot(symbol, interval, start_ms, end_ms)
         # If the request failed, catch the error so we can look at it
         except Exception as error:
             # The API's rate-limit errors carry the number 429 as their first argument
@@ -111,10 +115,10 @@ def to_dataframe(raw_candles, end_ms):
     return candles[COLUMNS]
 
 
-def fetch_candles_1d(info, symbol, start_ms, end_ms):
-    """Download closed daily bars for one symbol as a table."""
+def fetch_candles(info, symbol, interval, start_ms, end_ms):
+    """Download closed bars for one symbol as a table."""
     # Download the raw answer from the API, retrying when we are rate limited
-    raw_candles = download_with_retry(info, symbol, start_ms, end_ms)
+    raw_candles = download_with_retry(info, symbol, interval, start_ms, end_ms)
     # Turn the raw answer into our table and return it
     return to_dataframe(raw_candles, end_ms)
 
@@ -128,7 +132,7 @@ def load_saved_candles(path):
     return pd.DataFrame(columns=COLUMNS)
 
 
-def first_missing_bar_ms(symbol, last_saved):
+def first_missing_bar_ms(symbol, last_saved, interval):
     """Start time (ms) of the first bar we do not have yet for this symbol.
 
     last_saved maps symbol -> open_time of its newest saved bar.
@@ -136,8 +140,8 @@ def first_missing_bar_ms(symbol, last_saved):
     # A symbol we have never saved needs everything, starting from the global start date
     if symbol not in last_saved.index:
         return START_TIME_MS
-    # Otherwise convert its newest saved time to milliseconds and move forward one day
-    return int(last_saved[symbol].timestamp() * 1000) + ONE_DAY_MS
+    # Otherwise convert its newest saved time to milliseconds and move forward one bar
+    return int(last_saved[symbol].timestamp() * 1000) + BAR_MS[interval]
 
 
 def save_candles(tables, path):
@@ -167,10 +171,14 @@ def save_candles(tables, path):
     print(f"saved {len(candles)} rows, {candles['symbol'].nunique()} symbols")
 
 
-def update_candles_1d(data_dir: Path) -> None:
-    """Download any missing daily bars for every perp and save them."""
+def update_candles(data_dir: Path, interval: str) -> None:
+    """Download any missing bars (1d or 1h) for every perp and save them."""
+    # Stop early with a clear message if the interval is not one we support
+    if interval not in BAR_MS:
+        raise ValueError(f"interval must be one of {list(BAR_MS)}, got {interval!r}")
+
     # The full path of the candles file inside the data folder
-    path = Path(data_dir) / FILENAME
+    path = Path(data_dir) / candles_filename(interval)
     # Connect to Hyperliquid's main network; skip_ws=True means we don't need the live-feed connection
     info = Info(constants.MAINNET_API_URL, skip_ws=True)
     # "Now" in milliseconds; bars that close after this moment are not finished yet
@@ -200,11 +208,11 @@ def update_candles_1d(data_dir: Path) -> None:
                 continue
 
             # Work out where this coin's missing bars start
-            start_ms = first_missing_bar_ms(symbol, last_saved)
+            start_ms = first_missing_bar_ms(symbol, last_saved, interval)
             # Run the download inside try so one bad coin cannot stop the others
             try:
                 # Download the missing closed bars for this coin
-                new_bars = fetch_candles_1d(info, symbol, start_ms, end_ms)
+                new_bars = fetch_candles(info, symbol, interval, start_ms, end_ms)
             # If the download failed even after retries, handle the error here
             except Exception as error:
                 # Say which coin failed and why

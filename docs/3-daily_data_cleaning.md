@@ -1,7 +1,7 @@
-# Daily data: cleaning
+# Candle data: cleaning
 
-- **Code:** `src/wh_research/data/hyperliquid/clean_candles_1d.py` (`clean_candles_1d`, `update_candles_1d_cleaned`)
-- **Output:** `data/hyperliquid/candles_1d_cleaned.parquet` (gitignored, rebuilt from raw on every run)
+- **Code:** `src/wh_research/data/hyperliquid/clean_candles.py` (`clean_candles(df, interval)`, `update_candles_cleaned(data_dir, interval)`)
+- **Output:** `data/hyperliquid/candles_<interval>_cleaned.parquet` (gitignored, rebuilt from raw on every run)
 
 ## What it does
 
@@ -17,16 +17,16 @@
 | `ok_volume` | `volume >= 0` |
 | `is_valid` | all five `ok_*` columns are True |
 | `is_stale` | the close is unchanged for more than 3 bars in a row (`STALE_BARS`) |
-| `after_gap` | this is the first bar after one or more missing days for that coin |
+| `after_gap` | this is the first bar after one or more missing bars for that coin (a step longer than one bar of the interval) |
 
-Rows are flagged, not dropped, so the daily series has no gaps. A flat price can be a real quiet day, so you decide what to do with it.
+Rows are flagged, not dropped, so the series keeps no gaps. A flat price can be a real quiet period, so you decide what to do with it.
 
 ## Using it
 
     df = pd.read_parquet("data/hyperliquid/candles_1d_cleaned.parquet")
     good = df[df["is_valid"] & ~df["is_stale"]]
 
-Current data: 176,925 of 217,560 rows kept, 0 invalid, 27 stale bars (HPOS, NFTI, PANDORA), 0 gaps. 74 mid-series zero-volume bars are kept.
+Current 1d data: 176,925 of 217,560 rows kept, 0 invalid, 27 stale bars (HPOS, NFTI, PANDORA), 0 gaps. 74 mid-series zero-volume bars are kept.
 
 ## Research rules
 

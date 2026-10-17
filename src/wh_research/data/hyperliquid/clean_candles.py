@@ -1,12 +1,12 @@
-"""Cleaning for the Hyperliquid daily candles (candles_1d.parquet).
+"""Cleaning for the Hyperliquid candles (candles_1d.parquet or candles_1h.parquet).
 
-Only works with that file's columns:
+Only works with those files' columns:
 symbol, open_time, close_time, open, high, low, close, volume, trades
 
 Example:
-    df = pd.read_parquet("data/hyperliquid/candles_1d.parquet")
-    df = clean_candles_1d(df)
-    good = df[df["is_valid"] & ~df["is_stale"]]
+    df = pd.read_parquet("data/hyperliquid/candles_1h.parquet")
+    df = clean_candles(df, "1h")
+    good = df[df["is_valid"] & ~df["is_stale"] & ~df["after_gap"]]
 """
 
 # Path builds file paths in a way that works on any operating system
@@ -15,14 +15,17 @@ from pathlib import Path
 # pandas gives us tables (DataFrames) and reads/writes parquet files
 import pandas as pd
 
+# BAR_MS says how long one bar lasts, and candles_filename gives the raw file's name
+from wh_research.data.hyperliquid.candles import BAR_MS, candles_filename
+
 # A close price that stays the same for MORE than this many bars in a row is "stale"
 STALE_BARS = 3
 
 
-def clean_candles_1d(df):
+def clean_candles(df, interval):
     """Drop pre-trading bars, then add True/False check columns.
 
-    After the first step no rows are removed, so the daily series has no gaps.
+    After the first step no rows are removed, so the series has no gaps.
     """
     # Order the rows by coin, then by time, and work on a copy so the caller's table is untouched
     df = df.sort_values(["symbol", "open_time"]).copy()
@@ -65,27 +68,27 @@ def clean_candles_1d(df):
     # A bar is stale when it belongs to a run longer than STALE_BARS
     df["is_stale"] = run_length > STALE_BARS
 
-    # Step 3: gap detector. Flags the first bar after one or more missing days.
+    # Step 3: gap detector. Flags the first bar after one or more missing bars.
     # Get the time between each bar and the previous bar of the same coin (the first bar gets nothing)
     time_since_previous = df.groupby("symbol")["open_time"].diff()
-    # More than one day since the previous bar means days are missing (a missing value counts as False)
-    df["after_gap"] = time_since_previous > pd.Timedelta(days=1)
+    # More than one bar length since the previous bar means bars are missing (a missing value counts as False)
+    df["after_gap"] = time_since_previous > pd.Timedelta(milliseconds=BAR_MS[interval])
 
     # Hand the table back, with the new check columns added
     return df
 
 
-def update_candles_1d_cleaned(data_dir):
-    """Rebuild candles_1d_cleaned.parquet from candles_1d.parquet.
+def update_candles_cleaned(data_dir, interval):
+    """Rebuild candles_<interval>_cleaned.parquet from candles_<interval>.parquet.
 
     Always a full rebuild: a new bar can make earlier bars stale.
     """
     # Make sure data_dir is a Path, even if the caller passed plain text
     data_dir = Path(data_dir)
     # Read the raw candles file and clean it
-    df = clean_candles_1d(pd.read_parquet(data_dir / "candles_1d.parquet"))
-    # Where the cleaned file will be saved
-    path = data_dir / "candles_1d_cleaned.parquet"
+    df = clean_candles(pd.read_parquet(data_dir / candles_filename(interval)), interval)
+    # Where the cleaned file will be saved, such as candles_1h_cleaned.parquet
+    path = data_dir / f"candles_{interval}_cleaned.parquet"
     # A temporary file name next to it (same name, ending in .tmp)
     tmp = path.with_suffix(".tmp")
     # Write the table to the temporary file first (index=False skips the row numbers)
