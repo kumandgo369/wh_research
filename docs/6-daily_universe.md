@@ -1,9 +1,9 @@
 # Daily universe files
 
-- **Code:** `src/wh_research/data/hyperliquid/daily_universe.py` (`filter_daily_universe(df, min_mdv_usd)`, `update_daily_universe(data_dir, min_mdv_usd)`, `daily_universe_filename(min_mdv_usd)`)
-- **Runner:** `uv run python scripts/build_hyperliquid_daily_universe.py <min_mdv_usd>`, for example `2000000`
+- **Code:** `src/wh_research/data/hyperliquid/daily_universe.py` (`filter_daily_universe(df, min_mdv_usd, exit_mdv_usd=None)`, `update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None)`, `daily_universe_filename(min_mdv_usd, exit_mdv_usd=None)`)
+- **Runner:** `uv run python scripts/build_hyperliquid_daily_universe.py <min_mdv_usd> [<exit_mdv_usd>]`, for example `2000000` or `2000000 1000000`
 - **Input:** `data/hyperliquid/candles_1d_cleaned.parquet`
-- **Output:** one file per cutoff, `data/hyperliquid/universe_1d_min_mdv_<cutoff>.parquet` (gitignored, derived)
+- **Output:** one file per entry (and exit) level, `data/hyperliquid/universe_1d_min_mdv_<entry>[_exit_<exit>].parquet` (gitignored, derived)
 
 **Daily data only.** These files are made from daily bars for daily panels. There is no hourly version (see "Using it with hourly data" below).
 
@@ -18,7 +18,22 @@ All the columns of `candles_1d_cleaned.parquet` are kept (including the `ok_*`, 
 | `dollar_volume` | This bar's volume in dollars: `volume * (high + low + close) / 3` (volume is in coin units) |
 | `mdv_30d_prev` | MDV: the **median** daily dollar volume (not the mean, which is what "ADV" would mean) of the 30 bars ending at the **previous** bar's close |
 
-A row for day *t* is present when `mdv_30d_prev >= cutoff`. To use a higher cutoff than the file's, filter in a notebook: `df[df["mdv_30d_prev"] >= higher_cutoff]`.
+With a single cutoff, a row for day *t* is present when `mdv_30d_prev >= cutoff`, and you can use a higher cutoff in a notebook with `df[df["mdv_30d_prev"] >= higher_cutoff]`. With an entry and exit level (next section) the file also holds the days in between, so filtering it that way does not give a single-cutoff universe.
+
+## Entry and exit levels
+
+A single cutoff makes a coin whose MDV hovers around it join and leave again and again. Give a second, lower **exit** level to stop that: a coin joins when `mdv_30d_prev` reaches the **entry** level and stays in until `mdv_30d_prev` falls below the **exit** level.
+
+For each coin, in time order:
+
+- `mdv_30d_prev >= entry`: in.
+- `mdv_30d_prev < exit`: out.
+- Between exit and entry: keeps its last state (a coin that is in stays in, a coin that is out stays out, so it cannot enter below the entry level).
+- No `mdv_30d_prev` (under 30 bars of history, or right after a missing bar): out, and the state starts again from out.
+
+The exit level must be above 0 and at most the entry level. An exit level equal to the entry level (or none) is the single-cutoff rule, and gives the same file name and rows as before. Like everything else it only uses `mdv_30d_prev`, so it has no look-ahead: `tests/test_daily_universe.py::test_no_look_ahead_with_an_exit_level` checks this.
+
+On the current data, entry $2M with exit $1M has 563 joins and leaves instead of 1,048 for a single $2M cutoff. It adds 11,946 rows, all with `mdv_30d_prev` between $1.0M and $2.0M, and contains every row of the single-cutoff file.
 
 ## No look-ahead
 
@@ -38,9 +53,10 @@ A row for day *t* is present when `mdv_30d_prev >= cutoff`. To use a higher cuto
 
 ## Many cutoffs, many files
 
-- The cutoff in dollars is the script argument and is part of the file name: `2000000` gives `universe_1d_min_mdv_2m.parquet`, `500000` gives `universe_1d_min_mdv_500k.parquet`, `2500000` gives `universe_1d_min_mdv_2500k.parquet`.
-- A new cutoff creates a new file next to the others. Existing files for other cutoffs are never changed.
-- Running the same cutoff again **rebuilds that file from the cleaned candles** (it does not append). Run it after `clean_hyperliquid_candles.py 1d`, so the order is update → clean → universe, for each cutoff you keep.
+- The cutoff in dollars is the first script argument and is part of the file name: `2000000` gives `universe_1d_min_mdv_2m.parquet`, `500000` gives `universe_1d_min_mdv_500k.parquet`, `2500000` gives `universe_1d_min_mdv_2500k.parquet`.
+- An optional second argument is the exit level and adds `_exit_<level>` to the name: `2000000 1000000` gives `universe_1d_min_mdv_2m_exit_1m.parquet`.
+- A new level creates a new file next to the others. Existing files for other levels are never changed.
+- Running the same levels again **rebuilds that file from the cleaned candles** (it does not append). Run it after `clean_hyperliquid_candles.py 1d`, so the order is update → clean → universe, for each file you keep.
 
 ## Using it
 
@@ -50,9 +66,10 @@ A row for day *t* is present when `mdv_30d_prev >= cutoff`. To use a higher cuto
 
 Current 1d data (as of 2026-10-17):
 
-| Cutoff | Rows | Symbols on the latest day | Symbols ever included |
-| ------ | ---- | ------------------------- | --------------------- |
+| Entry / exit | Rows | Symbols on the latest day | Symbols ever included |
+| ------------ | ---- | ------------------------- | --------------------- |
 | $2M | 47,699 | 63 | 173 |
+| $2M / $1M | 59,645 | 65 | 173 |
 | $500k | 92,044 | 97 | 223 |
 
 The universe grows with market activity: at $2M it had 4 coins in mid-2023, about 27 in early 2024, and 63 in October 2026. If you need a stable size across time, filter on `mdv_30d_prev` and take the top *N* per day in the notebook.

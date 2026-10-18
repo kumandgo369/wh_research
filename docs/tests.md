@@ -87,6 +87,16 @@ Daily only. The tests build flat bars (open = high = low = close = 1) so dollar 
 | `test_filename_rejects_bad_cutoffs` | Zero, negative and fractional cutoffs raise an error |
 | `test_each_cutoff_gets_its_own_file_and_a_rerun_leaves_others_alone` | Two cutoffs write two files, no `.tmp` is left, and rerunning one does not touch the other |
 | `test_update_prints_a_summary` | The printed summary has the rows, latest-day symbols and symbols ever included |
+| `test_a_coin_that_is_in_stays_in_between_the_exit_and_entry_levels` | With an exit level a joined coin is kept while its median is between the levels; a single cutoff drops it |
+| `test_a_coin_between_the_levels_does_not_enter` | A coin that never reached the entry level is not kept, even above the exit level |
+| `test_a_coin_leaves_below_the_exit_level_and_needs_the_entry_level_to_return` | Leaves when the median falls below the exit level, stays out in between, returns only at the entry level |
+| `test_exit_level_equal_to_entry_level_gives_the_single_cutoff_result` | Exit equal to entry gives exactly the single-cutoff table |
+| `test_a_missing_bar_resets_a_coin_even_with_an_exit_level` | A gap still blocks the coin until its window is full again |
+| `test_exit_level_state_does_not_carry_from_one_symbol_to_the_next` | A coin that is in does not make the next coin in |
+| `test_bad_exit_levels_are_rejected` | Exit above entry, zero or negative raises an error |
+| `test_no_look_ahead_with_an_exit_level` | Rows up to a cut date are identical with or without later data, even if later volumes are multiplied by 1000 |
+| `test_filename_gets_an_exit_part_only_when_the_exit_level_is_lower` | `..._2m_exit_1m`, and no suffix for an equal or missing exit level |
+| `test_entry_exit_file_sits_next_to_the_single_cutoff_file` | Both files exist side by side, and rerunning one leaves the other untouched |
 
 ## How the downloader tests avoid the network
 

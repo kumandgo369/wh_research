@@ -208,3 +208,148 @@ def test_update_prints_a_summary(tmp_path, capsys):
     update_daily_universe(tmp_path, 5)
     # Assert: the summary names the file and counts rows and symbols
     assert "saved 10 rows to universe_1d_min_mdv_5.parquet, 1 symbols on the latest day, 1 symbols ever" in capsys.readouterr().out
+
+
+def test_a_coin_that_is_in_stays_in_between_the_exit_and_entry_levels():
+    # Arrange: 30 bars at 12 (above the entry level of 10), then 40 bars at 7 (between the exit level 5 and 10)
+    df = make_df(flat_bars("A", [12.0] * 30 + [7.0] * 40))
+    # Act: filter with entry 10 and exit 5
+    result = filter_daily_universe(df, 10, 5)
+    # Assert: the coin joins on its 31st bar and is never dropped, because 7 never falls below the exit level
+    assert kept_bars(result) == list(range(30, 70))
+    # Act again: with a single cutoff of 10, the same coin is dropped once its median falls to 7
+    single = filter_daily_universe(df, 10)
+    # Assert: the single cutoff keeps it from the start but loses it before the end
+    assert 30 in kept_bars(single)
+    # Assert: the last bar is missing from the single-cutoff result
+    assert 69 not in kept_bars(single)
+
+
+def test_a_coin_between_the_levels_does_not_enter():
+    # Arrange: 40 bars at 7, which is above the exit level (5) but below the entry level (10)
+    df = make_df(flat_bars("A", [7.0] * 40))
+    # Act: filter with entry 10 and exit 5
+    result = filter_daily_universe(df, 10, 5)
+    # Assert: the coin never joined, so nothing is kept
+    assert result.empty
+
+
+def test_a_coin_leaves_below_the_exit_level_and_needs_the_entry_level_to_return():
+    # Arrange: 30 bars at 12 (joins), 30 at 2 (below the exit level 5), 30 at 7 (between the levels), 30 at 12 (back above entry)
+    df = make_df(flat_bars("A", [12.0] * 30 + [2.0] * 30 + [7.0] * 30 + [12.0] * 30))
+    # Act: filter with entry 10 and exit 5
+    result = filter_daily_universe(df, 10, 5)
+    # Assert: in from bar 30 to 45, out from bar 46 (median 2 at the previous close), still out while the median is
+    # only 7, and back in from bar 106, the day after the median reached 12
+    assert kept_bars(result) == list(range(30, 46)) + list(range(106, 120))
+
+
+def test_exit_level_equal_to_entry_level_gives_the_single_cutoff_result():
+    # Arrange: two coins with 80 random bars each, like the look-ahead test
+    rng = np.random.default_rng(1)
+    # Put both coins in one table
+    df = make_df(flat_bars("A", rng.uniform(5, 15, 80)) + flat_bars("B", rng.uniform(0.5, 3.5, 80)))
+    # Act: filter with a single cutoff, and with the exit level given as the same number
+    single = filter_daily_universe(df, 2)
+    # The same cutoff given as both entry and exit
+    same = filter_daily_universe(df, 2, 2)
+    # Assert: the results are identical (and not empty)
+    assert len(single) > 0
+    # The two tables match exactly
+    pd.testing.assert_frame_equal(single, same)
+
+
+def test_a_missing_bar_resets_a_coin_even_with_an_exit_level():
+    # Arrange: 100 liquid bars (10) with bar 40 missing
+    df = make_df(flat_bars("A", [10.0] * 100, skip={40}))
+    # Act: filter with entry 5 and a much lower exit level of 1
+    result = filter_daily_universe(df, 5, 1)
+    # Assert: the gap blocks the coin until its window is full again, exactly as with a single cutoff
+    assert kept_bars(result) == list(range(30, 40)) + list(range(71, 100))
+
+
+def test_exit_level_state_does_not_carry_from_one_symbol_to_the_next():
+    # Arrange: coin A joins and stays in (12, then 7); coin B only ever sits at 7
+    df = make_df(flat_bars("A", [12.0] * 30 + [7.0] * 40) + flat_bars("B", [7.0] * 70))
+    # Act: filter with entry 10 and exit 5
+    result = filter_daily_universe(df, 10, 5)
+    # Assert: only coin A is kept
+    assert set(result["symbol"]) == {"A"}
+
+
+def test_bad_exit_levels_are_rejected():
+    # A small valid table to filter
+    df = make_df(flat_bars("A", [10.0] * 40))
+    # An exit level above the entry level makes no sense
+    with pytest.raises(ValueError):
+        filter_daily_universe(df, 5, 6)
+    # Neither does zero
+    with pytest.raises(ValueError):
+        filter_daily_universe(df, 5, 0)
+    # Or a negative number
+    with pytest.raises(ValueError):
+        filter_daily_universe(df, 5, -1)
+
+
+def test_no_look_ahead_with_an_exit_level():
+    # Arrange: two coins with 80 random bars each; A is liquid (about 10) and B sits between the levels (about 2)
+    rng = np.random.default_rng(2)
+    # Random volumes for coin A
+    volumes_a = rng.uniform(5, 15, 80)
+    # Random volumes for coin B
+    volumes_b = rng.uniform(0.5, 3.5, 80)
+    # Put both coins in one table
+    df = make_df(flat_bars("A", volumes_a) + flat_bars("B", volumes_b))
+    # The first 60 days are "the past"; later days are "the future"
+    cut = pd.Timestamp("2024-01-01", tz="UTC") + pd.Timedelta(days=60)
+    # Act: build the universe on all the data, with entry 8 and exit 4
+    full = filter_daily_universe(df, 8, 4)
+    # Act: build it again with only the past
+    past_only = filter_daily_universe(df[df["open_time"] < cut], 8, 4)
+    # Assert: the test is meaningful (the past has kept rows)
+    assert len(past_only) > 0
+    # Assert: every row up to the cut is identical whether or not the future is known
+    pd.testing.assert_frame_equal(full[full["open_time"] < cut].reset_index(drop=True), past_only)
+    # Arrange: make every future volume 1000 times bigger
+    changed = df.copy()
+    # Scale only the bars from the cut on
+    changed.loc[changed["open_time"] >= cut, "volume"] *= 1000
+    # Act: build the universe on the changed data
+    changed_result = filter_daily_universe(changed, 8, 4)
+    # Assert: the past rows still do not change
+    pd.testing.assert_frame_equal(changed_result[changed_result["open_time"] < cut].reset_index(drop=True), past_only)
+
+
+def test_filename_gets_an_exit_part_only_when_the_exit_level_is_lower():
+    # An exit level below the entry level is added to the name
+    assert daily_universe_filename(2_000_000, 1_000_000) == "universe_1d_min_mdv_2m_exit_1m.parquet"
+    # The thousands label works for the exit level too
+    assert daily_universe_filename(2_000_000, 500_000) == "universe_1d_min_mdv_2m_exit_500k.parquet"
+    # An exit level equal to the entry level changes nothing
+    assert daily_universe_filename(2_000_000, 2_000_000) == "universe_1d_min_mdv_2m.parquet"
+    # No exit level changes nothing either
+    assert daily_universe_filename(2_000_000, None) == "universe_1d_min_mdv_2m.parquet"
+    # A bad exit level is rejected like a bad entry level
+    with pytest.raises(ValueError):
+        daily_universe_filename(2_000_000, 0)
+
+
+def test_entry_exit_file_sits_next_to_the_single_cutoff_file(tmp_path):
+    # Arrange: a cleaned daily file with one coin that joins (12) and then sits between the levels (7)
+    make_df(flat_bars("A", [12.0] * 30 + [7.0] * 40)).to_parquet(tmp_path / "candles_1d_cleaned.parquet", index=False)
+    # Act: build a single cutoff of 10, and then the same entry level with an exit level of 5
+    update_daily_universe(tmp_path, 10)
+    # The entry/exit version
+    update_daily_universe(tmp_path, 10, 5)
+    # Where the two files should be
+    single, both = tmp_path / "universe_1d_min_mdv_10.parquet", tmp_path / "universe_1d_min_mdv_10_exit_5.parquet"
+    # Assert: both files exist
+    assert single.exists() and both.exists()
+    # Assert: the exit level keeps the coin longer, so its file has more rows
+    assert len(pd.read_parquet(both)) > len(pd.read_parquet(single))
+    # Remember the single file's exact bytes
+    before = single.read_bytes()
+    # Act: rerun the entry/exit version
+    update_daily_universe(tmp_path, 10, 5)
+    # Assert: the single-cutoff file is untouched
+    assert single.read_bytes() == before
