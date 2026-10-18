@@ -23,7 +23,8 @@ Rows are flagged, not dropped, so the series keeps no gaps. A flat price can be 
 
 ## Using it
 
-    df = pd.read_parquet("data/hyperliquid/candles_1d_cleaned.parquet")
+    DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
+    df = pd.read_parquet(DATA_DIR / "candles_1d_cleaned.parquet")
     good = df[df["is_valid"] & ~df["is_stale"]]
 
 Current 1d data: 176,925 of 217,560 rows kept, 0 invalid, 27 stale bars (HPOS, NFTI, PANDORA), 0 gaps. 74 mid-series zero-volume bars are kept.

@@ -44,7 +44,8 @@ A row for day *t* is present when `adv_30d_prev >= cutoff`. To use a higher cuto
 
 ## Using it
 
-    df = pd.read_parquet("data/hyperliquid/universe_1d_min_adv_2m.parquet")
+    DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
+    df = pd.read_parquet(DATA_DIR / "universe_1d_min_adv_2m.parquet")
     df["ret"] = df["close"] / df["open"] - 1       # the day's return; every row is tradeable that day
 
 Current 1d data (as of 2026-10-17):

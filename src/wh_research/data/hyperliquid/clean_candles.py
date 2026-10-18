@@ -4,7 +4,8 @@ Only works with those files' columns:
 symbol, open_time, close_time, open, high, low, close, volume, trades
 
 Example:
-    df = pd.read_parquet("data/hyperliquid/candles_1h.parquet")
+    DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
+    df = pd.read_parquet(DATA_DIR / "candles_1h.parquet")
     df = clean_candles(df, "1h")
     good = df[df["is_valid"] & ~df["is_stale"] & ~df["after_gap"]]
 """

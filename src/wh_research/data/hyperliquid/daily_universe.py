@@ -7,7 +7,8 @@ kept when that median, measured at the CLOSE OF DAY t-1, is at least the cutoff.
 nothing from day t (or later) decides whether day t is in the file, and there is no look-ahead.
 
 Example:
-    df = pd.read_parquet("data/hyperliquid/universe_1d_min_adv_2m.parquet")
+    DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
+    df = pd.read_parquet(DATA_DIR / "universe_1d_min_adv_2m.parquet")
     # every row is already tradeable on its own day, so its return can be used directly
 """
 
