@@ -1,6 +1,6 @@
 # wh_research
 
-Research on Hyperliquid perpetual futures: daily (1d) and hourly (1h) candles for every perp, downloaded from the Hyperliquid API, cleaned, and used from notebooks.
+WIP research library for WH
 
 ## Requirements
 
