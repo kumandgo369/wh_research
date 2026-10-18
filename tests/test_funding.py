@@ -253,3 +253,18 @@ def test_failed_symbol_is_left_out_and_fetched_on_the_next_run(fake_info, tmp_pa
     update_funding(tmp_path)
     # Assert: B was filled in this time, so both coins are saved
     assert set(read_saved(tmp_path)["symbol"]) == {"A", "B"}
+
+
+def test_update_prints_progress(fake_info, tmp_path, monkeypatch, capsys):
+    # Arrange: print a progress line after every symbol instead of every 25
+    monkeypatch.setattr(funding, "PROGRESS_EVERY", 1)
+
+    # Act: run the update (the fake exchange has 2 coins)
+    update_funding(tmp_path)
+
+    # Read everything the update printed
+    output = capsys.readouterr().out
+    # Assert: it said how many symbols it will check, and how far it got
+    assert "checking 2 symbols" in output
+    assert "1/2 symbols checked" in output
+    assert "2/2 symbols checked" in output

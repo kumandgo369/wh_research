@@ -297,3 +297,36 @@ def test_unsupported_interval_is_rejected(fake_info, tmp_path):
 
     # Assert: nothing was requested from the API
     assert fake_info.calls == []
+
+
+@pytest.mark.parametrize("interval", INTERVALS)
+def test_update_makes_no_requests_when_everything_is_up_to_date(fake_info, tmp_path, monkeypatch, interval):
+    # Arrange: set the clock to the exact moment bar 2 closes, so the 3 fake bars are the newest possible
+    monkeypatch.setattr("time.time", lambda: (BAR0_MS + 3 * BAR_MS[interval]) / 1000)
+    # Do the first run, which saves the 3 bars for A and B
+    update_candles(tmp_path, interval)
+    # Forget the requests from the first run so we only see the second run's requests
+    fake_info.calls.clear()
+
+    # Act: run the update again, with no new bar having closed
+    update_candles(tmp_path, interval)
+
+    # Assert: nothing was requested, because no new bar can exist yet
+    assert fake_info.calls == []
+    # Assert: the saved data is unchanged
+    assert read_saved(tmp_path, interval).groupby("symbol").size().to_dict() == {"A": 3, "B": 3}
+
+
+def test_update_prints_progress(fake_info, tmp_path, monkeypatch, capsys):
+    # Arrange: print a progress line after every symbol instead of every 25
+    monkeypatch.setattr(candles, "PROGRESS_EVERY", 1)
+
+    # Act: run the update (the fake exchange has 2 coins)
+    update_candles(tmp_path, "1d")
+
+    # Read everything the update printed
+    output = capsys.readouterr().out
+    # Assert: it said how many symbols it will check, and how far it got
+    assert "checking 2 symbols" in output
+    assert "1/2 symbols checked" in output
+    assert "2/2 symbols checked" in output

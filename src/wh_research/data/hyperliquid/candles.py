@@ -46,6 +46,8 @@ MAX_BARS = 5000
 
 # Seconds to pause after each symbol, which keeps us under the API's rate limit
 PAUSE_BETWEEN_SYMBOLS = 0.5
+# Print a progress line after this many symbols, so a quiet run does not look frozen
+PROGRESS_EVERY = 25
 
 # The API uses one-letter keys. We rename them to readable column names.
 API_COLUMN_NAMES = {
@@ -158,10 +160,15 @@ def update_candles(data_dir: Path, interval: str) -> None:
     # Start a list of tables to combine at the end, beginning with the saved data
     tables = [saved]
 
+    # Tell the user how much there is to check
+    print(f"checking {len(universe)} symbols")
     # try/finally makes sure the save at the bottom runs even if something goes wrong
     try:
-        # Go through every coin in the universe
-        for coin in universe:
+        # Go through every coin in the universe, counting from 1
+        for number, coin in enumerate(universe, start=1):
+            # Every PROGRESS_EVERY coins, say how far we are
+            if number % PROGRESS_EVERY == 0:
+                print(f"{number}/{len(universe)} symbols checked")
             # The coin's name, such as "BTC"
             symbol = coin["name"]
 
@@ -171,6 +178,9 @@ def update_candles(data_dir: Path, interval: str) -> None:
 
             # Work out where this coin's missing bars start
             start_ms = first_missing_bar_ms(symbol, last_saved, interval, end_ms)
+            # If the next bar has not closed yet, there is nothing to download for this coin
+            if start_ms + BAR_MS[interval] > end_ms:
+                continue
             # Run the download inside try so one bad coin cannot stop the others
             try:
                 # Download the missing closed bars for this coin

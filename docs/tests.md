@@ -24,6 +24,8 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_first_run_saves_every_symbol_sorted` (both intervals) | First run saves all symbols into the interval's file, sorted by symbol then time, starting `MAX_BARS` bars before "now" |
 | `test_second_run_fetches_only_new_bars_and_skips_delisted` (both intervals) | Update asks only for new bars, never re-fetches a saved delisted coin, and creates no duplicates |
 | `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
+| `test_update_makes_no_requests_when_everything_is_up_to_date` (both intervals) | A second run right after the newest bar closed asks for nothing and changes nothing |
+| `test_update_prints_progress` | The update prints how many symbols it checks and how far it got |
 | `test_unsupported_interval_is_rejected` | An interval like `5m` raises a clear error before any request |
 
 ## `tests/test_funding.py` — the funding downloader
@@ -41,6 +43,7 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_first_run_saves_every_symbol_sorted` | First run saves all symbols, sorted by symbol then time |
 | `test_second_run_fetches_only_new_rows_and_skips_delisted` | Update asks only for new rows, never re-fetches a saved delisted coin, and creates no duplicates |
 | `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
+| `test_update_prints_progress` | The update prints how many symbols it checks and how far it got |
 
 ## `tests/test_api_helpers.py` — shared retry and save helpers
 

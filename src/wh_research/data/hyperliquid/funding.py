@@ -47,6 +47,8 @@ START_TIME_MS = int(datetime(2023, 1, 1, tzinfo=timezone.utc).timestamp() * 1000
 
 # Seconds to pause after each request, which keeps us under the API's rate limit
 PAUSE_BETWEEN_REQUESTS = 0.5
+# Print a progress line after this many symbols, so a quiet run does not look frozen
+PROGRESS_EVERY = 25
 
 # The API's names for the columns, renamed to ours (time and premium already have good names)
 API_COLUMN_NAMES = {"coin": "symbol", "fundingRate": "funding_rate"}
@@ -141,10 +143,15 @@ def update_funding(data_dir: Path) -> None:
     # Start a list of tables to combine at the end, beginning with the saved data
     tables = [saved]
 
+    # Tell the user how much there is to check
+    print(f"checking {len(universe)} symbols")
     # try/finally makes sure the save at the bottom runs even if something goes wrong
     try:
-        # Go through every coin in the universe
-        for coin in universe:
+        # Go through every coin in the universe, counting from 1
+        for number, coin in enumerate(universe, start=1):
+            # Every PROGRESS_EVERY coins, say how far we are
+            if number % PROGRESS_EVERY == 0:
+                print(f"{number}/{len(universe)} symbols checked")
             # The coin's name, such as "BTC"
             symbol = coin["name"]
 

@@ -23,6 +23,7 @@ Key: `(symbol, time)`, sorted by symbol then time, no index.
 - **Full history.** History starts on 2023-05-12 (BTC) and there is no 5000-row cap like the candles have. The file can always be downloaded again from scratch, so it needs no backup.
 - **Cost.** The first download (2026-10-17) was 4,820,977 rows for 234 symbols (61 MB) and took about 2.5 hours (238 rate-limit retries, no failed symbol). Later updates take about one call per active coin, a few minutes. Growth is about 1.6M rows a year.
 - **Same rules as the candles.** Incremental update with a full rewrite via `.tmp`. A symbol is saved only after all its pages arrived, so a failed or interrupted symbol is absent and a rerun fetches it. Saved delisted coins are skipped.
+- **Progress.** It prints `checking N symbols`, a progress line every 25 symbols, and `SYMBOL: +N` per coin. Funding has no skip like the candles do, so even a second run makes about one request per active coin (a few minutes).
 - **Raw.** There is no cleaning step for funding yet.
 
 ## Data quirks
