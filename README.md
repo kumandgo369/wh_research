@@ -38,8 +38,8 @@ You get `candles_1d.parquet` and `candles_1h.parquet` (raw) plus `candles_1d_cle
 
 The daily universe keeps only the days a coin was liquid enough (30-day median dollar volume at the previous close is at least the cutoff). Give the cutoff in dollars; each cutoff gets its own file.
 
-    uv run python scripts/build_hyperliquid_daily_universe.py 2000000    # → universe_1d_min_adv_2m.parquet
-    uv run python scripts/build_hyperliquid_daily_universe.py 500000     # → universe_1d_min_adv_500k.parquet
+    uv run python scripts/build_hyperliquid_daily_universe.py 2000000    # → universe_1d_min_mdv_2m.parquet
+    uv run python scripts/build_hyperliquid_daily_universe.py 500000     # → universe_1d_min_mdv_500k.parquet
 
 Run it after the 1d candles are updated and cleaned. It takes a few seconds.
 

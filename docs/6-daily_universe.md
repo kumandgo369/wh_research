@@ -1,9 +1,9 @@
 # Daily universe files
 
-- **Code:** `src/wh_research/data/hyperliquid/daily_universe.py` (`filter_daily_universe(df, min_adv_usd)`, `update_daily_universe(data_dir, min_adv_usd)`, `daily_universe_filename(min_adv_usd)`)
-- **Runner:** `uv run python scripts/build_hyperliquid_daily_universe.py <min_adv_usd>`, for example `2000000`
+- **Code:** `src/wh_research/data/hyperliquid/daily_universe.py` (`filter_daily_universe(df, min_mdv_usd)`, `update_daily_universe(data_dir, min_mdv_usd)`, `daily_universe_filename(min_mdv_usd)`)
+- **Runner:** `uv run python scripts/build_hyperliquid_daily_universe.py <min_mdv_usd>`, for example `2000000`
 - **Input:** `data/hyperliquid/candles_1d_cleaned.parquet`
-- **Output:** one file per cutoff, `data/hyperliquid/universe_1d_min_adv_<cutoff>.parquet` (gitignored, derived)
+- **Output:** one file per cutoff, `data/hyperliquid/universe_1d_min_mdv_<cutoff>.parquet` (gitignored, derived)
 
 **Daily data only.** These files are made from daily bars for daily panels. There is no hourly version (see "Using it with hourly data" below).
 
@@ -16,9 +16,9 @@ All the columns of `candles_1d_cleaned.parquet` are kept (including the `ok_*`, 
 | Column | Meaning |
 | ------ | ------- |
 | `dollar_volume` | This bar's volume in dollars: `volume * (high + low + close) / 3` (volume is in coin units) |
-| `adv_30d_prev` | The **median** `dollar_volume` of the 30 bars ending at the **previous** bar's close |
+| `mdv_30d_prev` | MDV: the **median** daily dollar volume (not the mean, which is what "ADV" would mean) of the 30 bars ending at the **previous** bar's close |
 
-A row for day *t* is present when `adv_30d_prev >= cutoff`. To use a higher cutoff than the file's, filter in a notebook: `df[df["adv_30d_prev"] >= higher_cutoff]`.
+A row for day *t* is present when `mdv_30d_prev >= cutoff`. To use a higher cutoff than the file's, filter in a notebook: `df[df["mdv_30d_prev"] >= higher_cutoff]`.
 
 ## No look-ahead
 
@@ -38,14 +38,14 @@ A row for day *t* is present when `adv_30d_prev >= cutoff`. To use a higher cuto
 
 ## Many cutoffs, many files
 
-- The cutoff in dollars is the script argument and is part of the file name: `2000000` gives `universe_1d_min_adv_2m.parquet`, `500000` gives `universe_1d_min_adv_500k.parquet`, `2500000` gives `universe_1d_min_adv_2500k.parquet`.
+- The cutoff in dollars is the script argument and is part of the file name: `2000000` gives `universe_1d_min_mdv_2m.parquet`, `500000` gives `universe_1d_min_mdv_500k.parquet`, `2500000` gives `universe_1d_min_mdv_2500k.parquet`.
 - A new cutoff creates a new file next to the others. Existing files for other cutoffs are never changed.
 - Running the same cutoff again **rebuilds that file from the cleaned candles** (it does not append). Run it after `clean_hyperliquid_candles.py 1d`, so the order is update → clean → universe, for each cutoff you keep.
 
 ## Using it
 
     DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
-    df = pd.read_parquet(DATA_DIR / "universe_1d_min_adv_2m.parquet")
+    df = pd.read_parquet(DATA_DIR / "universe_1d_min_mdv_2m.parquet")
     df["ret"] = df["close"] / df["open"] - 1       # the day's return; every row is tradeable that day
 
 Current 1d data (as of 2026-10-17):
@@ -55,7 +55,7 @@ Current 1d data (as of 2026-10-17):
 | $2M | 47,699 | 63 | 173 |
 | $500k | 92,044 | 97 | 223 |
 
-The universe grows with market activity: at $2M it had 4 coins in mid-2023, about 27 in early 2024, and 63 in October 2026. If you need a stable size across time, filter on `adv_30d_prev` and take the top *N* per day in the notebook.
+The universe grows with market activity: at $2M it had 4 coins in mid-2023, about 27 in early 2024, and 63 in October 2026. If you need a stable size across time, filter on `mdv_30d_prev` and take the top *N* per day in the notebook.
 
 ## Using it with hourly data
 

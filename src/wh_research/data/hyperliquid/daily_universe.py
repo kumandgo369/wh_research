@@ -8,7 +8,7 @@ nothing from day t (or later) decides whether day t is in the file, and there is
 
 Example:
     DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
-    df = pd.read_parquet(DATA_DIR / "universe_1d_min_adv_2m.parquet")
+    df = pd.read_parquet(DATA_DIR / "universe_1d_min_mdv_2m.parquet")
     # every row is already tradeable on its own day, so its return can be used directly
 """
 
@@ -22,17 +22,17 @@ import pandas as pd
 from wh_research.data.hyperliquid.candles import BAR_MS
 
 # How many daily bars the liquidity median looks at (also the history a coin needs first)
-ADV_WINDOW_DAYS = 30
+MDV_WINDOW_DAYS = 30
 
 
-def daily_universe_filename(min_adv_usd):
-    """The name of the universe file for a cutoff, such as universe_1d_min_adv_2m.parquet."""
+def daily_universe_filename(min_mdv_usd):
+    """The name of the universe file for a cutoff, such as universe_1d_min_mdv_2m.parquet."""
     # The cutoff must be a whole number of dollars above zero
-    if min_adv_usd != int(min_adv_usd) or min_adv_usd <= 0:
+    if min_mdv_usd != int(min_mdv_usd) or min_mdv_usd <= 0:
         # Stop with a clear message instead of making a strange file name
-        raise ValueError(f"min_adv_usd must be a positive whole number of dollars, got {min_adv_usd}")
+        raise ValueError(f"min_mdv_usd must be a positive whole number of dollars, got {min_mdv_usd}")
     # Work with a plain integer from here on
-    dollars = int(min_adv_usd)
+    dollars = int(min_mdv_usd)
     # Whole millions are written with "m", such as 2000000 -> 2m
     if dollars % 1_000_000 == 0:
         # Build the short label from the number of millions
@@ -46,14 +46,14 @@ def daily_universe_filename(min_adv_usd):
         # Use the dollars as they are
         label = str(dollars)
     # Put the label into the file name
-    return f"universe_1d_min_adv_{label}.parquet"
+    return f"universe_1d_min_mdv_{label}.parquet"
 
 
-def filter_daily_universe(df, min_adv_usd):
+def filter_daily_universe(df, min_mdv_usd):
     """Keep the daily bars of coins that were liquid enough at the previous day's close.
 
     df is the cleaned 1d table. Returns its rows that pass, with two extra columns:
-    dollar_volume (this bar's volume in dollars) and adv_30d_prev (the 30-day median
+    dollar_volume (this bar's volume in dollars) and mdv_30d_prev (the 30-day median
     dollar volume as known at the previous bar's close).
     """
     # Order the rows by coin, then by time, and number the rows again from 0 so row labels are unique
@@ -63,31 +63,31 @@ def filter_daily_universe(df, min_adv_usd):
     df["dollar_volume"] = df["volume"] * (df["high"] + df["low"] + df["close"]) / 3
 
     # Rolling window over the last 30 days that ends at this bar's close_time and looks at nothing later
-    window = df.groupby("symbol").rolling(f"{ADV_WINDOW_DAYS}D", on="close_time")["dollar_volume"]
+    window = df.groupby("symbol").rolling(f"{MDV_WINDOW_DAYS}D", on="close_time")["dollar_volume"]
     # Median dollar volume over that window. The results come back in df's own row order (df is sorted by
     # coin, as the groups are), so we line them up by position instead of by label.
-    adv_30d = window.median().to_numpy()
+    mdv_30d = window.median().to_numpy()
     # Number of bars inside each window, in the same row order
     bars_in_window = window.count().to_numpy()
     # Minimum history: with fewer than 30 bars in the window (new coin or a gap) there is no value
-    df["adv_30d"] = pd.Series(adv_30d, index=df.index).where(bars_in_window == ADV_WINDOW_DAYS)
+    df["mdv_30d"] = pd.Series(mdv_30d, index=df.index).where(bars_in_window == MDV_WINDOW_DAYS)
 
     # What the median was at the PREVIOUS bar's close, within the same coin (first bar of a coin gets nothing)
-    df["adv_30d_prev"] = df.groupby("symbol")["adv_30d"].shift()
+    df["mdv_30d_prev"] = df.groupby("symbol")["mdv_30d"].shift()
     # The open time of the previous bar of the same coin
     previous_open = df.groupby("symbol")["open_time"].shift()
     # The previous bar only counts if it is exactly one day earlier (no missing bar right before this one)
     follows_directly = (df["open_time"] - previous_open) == pd.Timedelta(milliseconds=BAR_MS["1d"])
     # After a missing bar the old value is not trusted, so blank it
-    df["adv_30d_prev"] = df["adv_30d_prev"].where(follows_directly)
+    df["mdv_30d_prev"] = df["mdv_30d_prev"].where(follows_directly)
 
     # Keep only the bars where the previous close's median reached the cutoff (a missing value counts as False)
-    kept = df[df["adv_30d_prev"] >= min_adv_usd]
+    kept = df[df["mdv_30d_prev"] >= min_mdv_usd]
     # Hand back the kept rows without the same-day median, so it can't be used by mistake to pick day t
-    return kept.drop(columns=["adv_30d"]).reset_index(drop=True)
+    return kept.drop(columns=["mdv_30d"]).reset_index(drop=True)
 
 
-def update_daily_universe(data_dir, min_adv_usd):
+def update_daily_universe(data_dir, min_mdv_usd):
     """Rebuild the universe file for one cutoff from candles_1d_cleaned.parquet.
 
     Always a full rebuild of that cutoff's file. Files of other cutoffs are left alone.
@@ -97,9 +97,9 @@ def update_daily_universe(data_dir, min_adv_usd):
     # Read the cleaned daily candles
     df = pd.read_parquet(data_dir / "candles_1d_cleaned.parquet")
     # Keep only the liquid-enough bars
-    universe = filter_daily_universe(df, min_adv_usd)
-    # Where this cutoff's file will be saved, such as universe_1d_min_adv_2m.parquet
-    path = data_dir / daily_universe_filename(min_adv_usd)
+    universe = filter_daily_universe(df, min_mdv_usd)
+    # Where this cutoff's file will be saved, such as universe_1d_min_mdv_2m.parquet
+    path = data_dir / daily_universe_filename(min_mdv_usd)
     # A temporary file name next to it (same name, ending in .tmp)
     tmp = path.with_suffix(".tmp")
     # Write the table to the temporary file first (index=False skips the row numbers)

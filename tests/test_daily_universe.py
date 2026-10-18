@@ -110,16 +110,16 @@ def test_dollar_volume_uses_the_typical_price():
     # Assert: every kept bar has dollar volume 12 and a previous median of 12
     assert (result["dollar_volume"] == 12.0).all()
     # Assert: the median known at the previous close is 12 too
-    assert (result["adv_30d_prev"] == 12.0).all()
+    assert (result["mdv_30d_prev"] == 12.0).all()
 
 
 def test_same_day_median_column_is_not_in_the_result():
     # Arrange and act: a small liquid coin
     result = filter_daily_universe(make_df(flat_bars("A", [10.0] * 40)), 5)
     # Assert: only the previous-close median is given, so day t cannot be picked with day t's own data
-    assert "adv_30d_prev" in result.columns
+    assert "mdv_30d_prev" in result.columns
     # Assert: the same-day median is not there
-    assert "adv_30d" not in result.columns
+    assert "mdv_30d" not in result.columns
 
 
 def test_no_look_ahead_in_the_universe():
@@ -153,13 +153,13 @@ def test_no_look_ahead_in_the_universe():
 
 def test_filename_uses_m_for_millions_and_k_for_thousands():
     # Whole millions
-    assert daily_universe_filename(2_000_000) == "universe_1d_min_adv_2m.parquet"
+    assert daily_universe_filename(2_000_000) == "universe_1d_min_mdv_2m.parquet"
     # Whole thousands
-    assert daily_universe_filename(500_000) == "universe_1d_min_adv_500k.parquet"
+    assert daily_universe_filename(500_000) == "universe_1d_min_mdv_500k.parquet"
     # Whole thousands that are not whole millions
-    assert daily_universe_filename(2_500_000) == "universe_1d_min_adv_2500k.parquet"
+    assert daily_universe_filename(2_500_000) == "universe_1d_min_mdv_2500k.parquet"
     # Anything else keeps the number
-    assert daily_universe_filename(1_500) == "universe_1d_min_adv_1500.parquet"
+    assert daily_universe_filename(1_500) == "universe_1d_min_mdv_1500.parquet"
 
 
 def test_filename_rejects_bad_cutoffs():
@@ -184,7 +184,7 @@ def test_each_cutoff_gets_its_own_file_and_a_rerun_leaves_others_alone(tmp_path)
     # The second cutoff only lets coin A in
     update_daily_universe(tmp_path, 5)
     # Where the two files should be
-    low, high = tmp_path / "universe_1d_min_adv_2.parquet", tmp_path / "universe_1d_min_adv_5.parquet"
+    low, high = tmp_path / "universe_1d_min_mdv_2.parquet", tmp_path / "universe_1d_min_mdv_5.parquet"
     # Assert: both files exist side by side and no temporary file is left over
     assert low.exists() and high.exists()
     # Assert: no leftover temporary files
@@ -207,4 +207,4 @@ def test_update_prints_a_summary(tmp_path, capsys):
     # Act: build the universe
     update_daily_universe(tmp_path, 5)
     # Assert: the summary names the file and counts rows and symbols
-    assert "saved 10 rows to universe_1d_min_adv_5.parquet, 1 symbols on the latest day, 1 symbols ever" in capsys.readouterr().out
+    assert "saved 10 rows to universe_1d_min_mdv_5.parquet, 1 symbols on the latest day, 1 symbols ever" in capsys.readouterr().out

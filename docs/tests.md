@@ -81,7 +81,7 @@ Daily only. The tests build flat bars (open = high = low = close = 1) so dollar 
 | `test_a_missing_bar_blocks_eligibility_until_the_window_is_full_again` | A gap blocks the bar after it and every bar whose 30-day window contains it |
 | `test_symbols_do_not_mix` | A liquid coin does not lift an illiquid one |
 | `test_dollar_volume_uses_the_typical_price` | Dollar volume is volume times (high + low + close) / 3 |
-| `test_same_day_median_column_is_not_in_the_result` | Only `adv_30d_prev` is returned, not the same-day median |
+| `test_same_day_median_column_is_not_in_the_result` | Only `mdv_30d_prev` is returned, not the same-day median |
 | `test_no_look_ahead_in_the_universe` | Rows up to a cut date are identical with or without the later data, even if later volumes are multiplied by 1000 |
 | `test_filename_uses_m_for_millions_and_k_for_thousands` | `2m`, `500k`, `2500k` and the plain number |
 | `test_filename_rejects_bad_cutoffs` | Zero, negative and fractional cutoffs raise an error |
