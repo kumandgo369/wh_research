@@ -20,7 +20,8 @@ Limits:
 Update behavior:
 - The whole parquet file is rewritten on each run (atomic swap via .tmp).
 - Symbols that fail are not written, so rerunning fetches only the missing ones.
-- Delisted symbols already on disk are skipped.
+- Delisted symbols are requested like any other, so a coin delisted between two
+  runs still gets its last bars. The API returns nothing after delisting.
 """
 
 # time lets us read the clock and pause (sleep) between requests
@@ -150,8 +151,6 @@ def update_candles(data_dir: Path, interval: str) -> None:
 
     # Ask the API for the list of all perpetual futures (called the universe)
     universe = info.meta()["universe"]
-    # Collect the names of coins marked as delisted (.get falls back to False when the flag is missing)
-    delisted = {coin["name"] for coin in universe if coin.get("isDelisted", False)}
 
     # Load what we saved on earlier runs (empty on the first run)
     saved = load_saved_candles(path)
@@ -171,10 +170,6 @@ def update_candles(data_dir: Path, interval: str) -> None:
                 print(f"{number}/{len(universe)} symbols checked")
             # The coin's name, such as "BTC"
             symbol = coin["name"]
-
-            # A delisted coin's history never changes, so skip it once saved.
-            if symbol in last_saved.index and symbol in delisted:
-                continue
 
             # Work out where this coin's missing bars start
             start_ms = first_missing_bar_ms(symbol, last_saved, interval, end_ms)

@@ -2,7 +2,7 @@
 
     uv run pytest                                              # everything
     uv run pytest tests/test_candles.py                        # one file
-    uv run pytest tests/test_candles.py::test_second_run_fetches_only_new_bars_and_skips_delisted   # one test
+    uv run pytest tests/test_candles.py::test_second_run_fetches_new_bars_for_every_coin_including_delisted   # one test
 
 All tests run offline and in about a second. Nothing touches the network or your real data files (file tests use pytest's `tmp_path`).
 
@@ -22,7 +22,7 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_first_missing_bar_for_new_symbol_is_5000_bars_before_now` (both intervals) | A new symbol starts `MAX_BARS` bars before "now" |
 | `test_first_missing_bar_for_saved_symbol_is_the_next_bar` (both intervals) | A saved symbol continues from its last bar + one bar |
 | `test_first_run_saves_every_symbol_sorted` (both intervals) | First run saves all symbols into the interval's file, sorted by symbol then time, starting `MAX_BARS` bars before "now" |
-| `test_second_run_fetches_only_new_bars_and_skips_delisted` (both intervals) | Update asks only for new bars, never re-fetches a saved delisted coin, and creates no duplicates |
+| `test_second_run_fetches_new_bars_for_every_coin_including_delisted` (both intervals) | Update asks only for new bars, but for every coin including delisted ones (one may have been delisted since the last run), and creates no duplicates |
 | `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
 | `test_update_makes_no_requests_when_everything_is_up_to_date` (both intervals) | A second run right after the newest bar closed asks for nothing and changes nothing |
 | `test_update_prints_progress` | The update prints how many symbols it checks and how far it got |
@@ -41,7 +41,7 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_first_missing_time_for_new_symbol_is_the_global_start` | A new symbol starts from `START_TIME_MS` |
 | `test_first_missing_time_for_saved_symbol_is_one_millisecond_later` | A saved symbol continues 1 ms after its last row |
 | `test_first_run_saves_every_symbol_sorted` | First run saves all symbols, sorted by symbol then time |
-| `test_second_run_fetches_only_new_rows_and_skips_delisted` | Update asks only for new rows, never re-fetches a saved delisted coin, and creates no duplicates |
+| `test_second_run_fetches_new_rows_for_every_coin_including_delisted` | Update asks only for new rows, but for every coin including delisted ones, and creates no duplicates |
 | `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
 | `test_update_prints_progress` | The update prints how many symbols it checks and how far it got |
 

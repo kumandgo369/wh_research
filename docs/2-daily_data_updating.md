@@ -12,7 +12,7 @@ The first download and every later update use the same command.
 ## What an update does
 
 - Fetches only new bars per symbol (from the last `open_time` + one bar), plus any symbol missing from the file.
-- Skips delisted symbols already on disk.
+- Asks again for delisted symbols too (the API returns nothing after delisting), so a coin delisted since the last run still gets its last bars. This costs about 56 quick requests per run.
 - **Skips coins that cannot have a new closed bar yet.** If everything is current (for example a second `1d` run on the same day), no request is made and the run finishes in seconds.
 - Prints `checking N symbols`, a `25/234 symbols checked` line every 25 symbols, and `SYMBOL: +N` for each coin that got new bars, so a run does not look frozen. When new bars have closed, a `1d` run makes about one request per active coin and takes 2 to 3 minutes.
 - Rewrites the whole file (about 200k rows for 1d, under a second) via `.tmp` and an atomic swap. Progress is saved even on Ctrl+C.

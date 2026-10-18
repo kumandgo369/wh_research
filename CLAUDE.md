@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Quantitative crypto research repo. Currently it contains two data pipelines for all Hyperliquid perps, stored as parquet files and used from notebooks: 1d and 1h OHLCV candles (one file per interval) and funding rate history (one file). The package is `wh_research` (src layout, built with `uv_build`, Python 3.14, managed with `uv`).
+Quantitative crypto research repo. Currently it contains two data pipelines for all Hyperliquid perps, stored as parquet files and used from notebooks: 1d and 1h OHLCV candles (one file per interval) and funding rate history (one file). On top of the 1d cleaned candles it builds daily-only tradeable-universe files (one per liquidity cutoff). The package is `wh_research` (src layout, built with `uv_build`, Python 3.14, managed with `uv`).
 
 ## Commands
 
@@ -31,13 +31,13 @@ Code style:
 - `src/wh_research/data/hyperliquid/candles.py` — all downloader logic; `clean_candles.py` — cleaning (`clean_candles`) and the cleaned-file rebuild (`update_candles_cleaned`). Both take an `interval`; `BAR_MS` in `candles.py` is the table of supported intervals and bar lengths. `funding.py` downloads funding rates (paged, 500 rows per call). `api_helpers.py` holds the retry-on-429 and safe-save helpers shared by both downloaders. `daily_universe.py` builds the daily-only tradeable-universe files from `candles_1d_cleaned.parquet` (`filter_daily_universe`, `update_daily_universe`). The `scripts/` files are thin runners that point them at `data/hyperliquid/`.
 - `data/` is gitignored. `candles_<interval>.parquet` is the raw dataset and `candles_<interval>_cleaned.parquet` is derived, `universe_1d_min_adv_<cutoff>.parquet` is derived (one file per cutoff), and `funding.parquet` is raw. The 1d files can be re-downloaded in full, but the 1h raw file cannot (see below), so it needs a backup.
 - `notebooks/` — analysis notebooks. `wip/` — scratch notebooks and scripts, gitignored.
-- `docs/1-daily_data_downloading.md`, `2-daily_data_updating.md`, `3-daily_data_cleaning.md`, `4-hourly_data.md`, `5-funding_data.md`, `6-daily_universe.md` — the datasets' schema, quirks, update workflow, cleaning flags, 1h specifics, funding specifics and the daily universe files. Read them before touching the data or writing analysis on it. `docs/tests.md` lists every test and how the downloader tests fake the API. `docs/research_process.md` is currently empty.
+- `docs/1-daily_data_downloading.md`, `2-daily_data_updating.md`, `3-daily_data_cleaning.md`, `4-hourly_data.md`, `5-funding_data.md`, `6-daily_universe.md` — the datasets' schema, quirks, update workflow, cleaning flags, 1h specifics, funding specifics and the daily universe files. Read them before touching the data or writing analysis on it. `docs/tests.md` lists every test and how the downloader tests fake the API.
 
 ## Data pipeline: things that span multiple places
 
 - **Incremental update, full rewrite.** `update_candles` reads the existing parquet, fetches only new bars per symbol (from last `open_time` + one bar), concatenates, dedupes on `(symbol, open_time)`, sorts, and swaps the file in via `.tmp`. The write is in a `finally`, so Ctrl+C or a crash still saves progress.
 - **Failed symbols are simply absent** (the script does not record them). Rerunning fetches whatever is missing. HTTP 429 is retried with backoff, and the SDK raises exceptions whose `args[0]` is the status code, which is what the retry check inspects.
-- **Delisted symbols** (`isDelisted` in `info.meta()["universe"]`) are kept on disk and never refetched. Do not drop them (survivorship bias).
+- **Delisted symbols** (`isDelisted` in `info.meta()["universe"]`) are kept on disk. Do not drop them (survivorship bias). They are asked again on every update, so a coin delisted since the last run still gets its final bars: candles come back empty, but funding keeps returning hourly zero-rate placeholder rows after delisting (see `5-funding_data.md`).
 - **Closed bars only**: bars with `close_time >= now` are dropped at fetch time.
 - **Start of a new symbol**: requested from `MAX_BARS` (5000) bars before now, not from a fixed date. This avoids a survivorship-biased 1h slice (delisted coins reach further back than active ones), but delisted coins older than the window are never saved.
 - **The API keeps only the 5000 most recent bars per symbol and interval** (about 208 days at 1h). 1h history older than that exists only because earlier updates saved it, so run the 1h update at least every ~200 days and never delete `candles_1h.parquet` without a backup. The 1h data starts at 2026-03-23.

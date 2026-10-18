@@ -253,7 +253,7 @@ def test_first_run_saves_every_symbol_sorted(fake_info, tmp_path, interval):
 
 
 @pytest.mark.parametrize("interval", INTERVALS)
-def test_second_run_fetches_only_new_bars_and_skips_delisted(fake_info, tmp_path, interval):
+def test_second_run_fetches_new_bars_for_every_coin_including_delisted(fake_info, tmp_path, interval):
     # Arrange: do the first run, which saves 3 bars for A and B
     update_candles(tmp_path, interval)
     # A new bar appears on the fake exchange
@@ -264,12 +264,13 @@ def test_second_run_fetches_only_new_bars_and_skips_delisted(fake_info, tmp_path
     # Act: run the update again
     update_candles(tmp_path, interval)
 
-    # Assert: only A was requested, starting after its last saved bar; delisted B was never requested
-    assert fake_info.calls == [("A", BAR0_MS + 3 * BAR_MS[interval])]
+    # Assert: both coins were requested, each starting after its last saved bar (B is marked delisted but
+    # may have been delisted only after the last run, so it is asked again)
+    assert fake_info.calls == [("A", BAR0_MS + 3 * BAR_MS[interval]), ("B", BAR0_MS + 3 * BAR_MS[interval])]
     # Read back what is now saved
     saved = read_saved(tmp_path, interval)
-    # Assert: A gained the new bar (4 bars) and B is unchanged (3 bars)
-    assert saved.groupby("symbol").size().to_dict() == {"A": 4, "B": 3}
+    # Assert: both coins gained the new bar (4 bars each)
+    assert saved.groupby("symbol").size().to_dict() == {"A": 4, "B": 4}
     # Assert: no (symbol, open_time) pair appears twice
     assert not saved.duplicated(["symbol", "open_time"]).any()
 

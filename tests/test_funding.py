@@ -218,7 +218,7 @@ def test_first_run_saves_every_symbol_sorted(fake_info, tmp_path):
     assert saved.groupby("symbol").size().to_dict() == {"A": 4, "B": 4}
 
 
-def test_second_run_fetches_only_new_rows_and_skips_delisted(fake_info, tmp_path):
+def test_second_run_fetches_new_rows_for_every_coin_including_delisted(fake_info, tmp_path):
     # Arrange: do the first run, which saves 4 rows for A and B
     update_funding(tmp_path)
     # Two new rows appear on the fake exchange
@@ -229,12 +229,13 @@ def test_second_run_fetches_only_new_rows_and_skips_delisted(fake_info, tmp_path
     # Act: run the update again
     update_funding(tmp_path)
 
-    # Assert: only A was requested, once, starting 1 ms after its last saved row; delisted B was never requested
-    assert fake_info.calls == [("A", funding_time_ms(3) + 1)]
+    # Assert: both coins were requested once, starting 1 ms after their last saved row (B is marked delisted
+    # but may have been delisted only after the last run, so it is asked again)
+    assert fake_info.calls == [("A", funding_time_ms(3) + 1), ("B", funding_time_ms(3) + 1)]
     # Read back what is now saved
     saved = read_saved(tmp_path)
-    # Assert: A gained the 2 new rows and B is unchanged
-    assert saved.groupby("symbol").size().to_dict() == {"A": 6, "B": 4}
+    # Assert: both coins gained the 2 new rows
+    assert saved.groupby("symbol").size().to_dict() == {"A": 6, "B": 6}
     # Assert: no (symbol, time) pair appears twice
     assert not saved.duplicated(["symbol", "time"]).any()
 

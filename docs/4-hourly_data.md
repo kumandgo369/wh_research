@@ -21,17 +21,17 @@ A symbol we have never saved is requested from 5000 bars before now (`MAX_BARS` 
 
 - The 1h data starts at **2026-03-23** (the first download was 2026-10-17) and grows by one hour per hour while the update keeps running. It cannot be backfilled through this API.
 - Use the daily data for anything earlier.
-- **Delisted coins** whose last bar is older than the window return nothing and are not saved. Each update still requests them once and gets an empty answer (about 20 seconds in total).
+- **Delisted coins** whose last bar is older than the window return nothing and are not saved (39 of the 234 symbols have no 1h data). Each update still requests them and gets an empty answer (about 20 seconds in total).
 
 ### Why not start at 2022?
 
 The first 1h download did start at 2022-01-01. For an active coin that returns the same last 5000 bars, but a delisted coin returns the 5000 bars before its delisting, which can be years earlier. That left 245,304 rows (21%) before 2026-03-23 that came **only from coins that were later delisted**: a survivorship-biased slice with BTC and every surviving coin missing. Symbol counts per month looked like 2 to 22 coins until early 2026, then jumped to about 190, which does not reflect listings or delistings.
 
-Those rows were removed once (2026-10-17, by trimming the file to `open_time >= 2026-03-23`). A copy of the untrimmed file may still exist as `data/hyperliquid/candles_1h.backup.parquet`; it can be deleted.
+Those rows were removed once (2026-10-17, by trimming the file to `open_time >= 2026-03-23`).
 
 ## Size
 
-About 903k rows for 234 symbols, 32 MB raw and 33 MB cleaned. Expect roughly 1.5M rows (60 MB) of growth a year.
+About 907k rows for 195 symbols, 32 MB raw and 33 MB cleaned. Expect roughly 1.5M rows (60 MB) of growth a year.
 
 ## Cleaning at 1h
 
