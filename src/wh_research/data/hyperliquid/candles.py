@@ -35,14 +35,15 @@ from hyperliquid.info import Info
 # constants holds the official API addresses, such as the main (real money) network
 from hyperliquid.utils import constants
 
+# MAX_ATTEMPTS is re-exported here for the tests; the helpers retry requests and save tables safely
+from wh_research.data.hyperliquid.api_helpers import MAX_ATTEMPTS, call_with_retry, save_table
+
 # How long one bar lasts, in milliseconds, for each candle size we support
 BAR_MS = {"1d": 86_400_000, "1h": 3_600_000}
 
 # The most candles the API ever returns per symbol and interval
 MAX_BARS = 5000
 
-# How many times we try a request before giving up
-MAX_ATTEMPTS = 8
 # Seconds to pause after each symbol, which keeps us under the API's rate limit
 PAUSE_BETWEEN_SYMBOLS = 0.5
 
@@ -69,27 +70,8 @@ def candles_filename(interval):
 
 def download_with_retry(info, symbol, interval, start_ms, end_ms):
     """Ask the API for candles. If it says 429 (too many requests), wait and retry."""
-    # Wait 5 seconds before the first retry
-    wait_seconds = 5
-    # Try the request up to MAX_ATTEMPTS times, counting attempts from 1
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        # Run the request inside try so we can react if it fails
-        try:
-            # Ask the API for this symbol's candles and hand back the answer straight away if it works
-            return info.candles_snapshot(symbol, interval, start_ms, end_ms)
-        # If the request failed, catch the error so we can look at it
-        except Exception as error:
-            # The API's rate-limit errors carry the number 429 as their first argument
-            is_rate_limit = error.args[:1] == (429,)
-            # Give up (re-raise the error) if it is not a rate limit, or if this was the last attempt
-            if not is_rate_limit or attempt == MAX_ATTEMPTS:
-                raise
-            # Tell the user we are about to wait
-            print(f"{symbol}: 429, retry in {wait_seconds}s")
-            # Pause so the rate limit can reset
-            time.sleep(wait_seconds)
-            # Wait twice as long next time, but never more than 60 seconds
-            wait_seconds = min(wait_seconds * 2, 60)
+    # Make the request with retries; the symbol name is used in the "429" message
+    return call_with_retry(lambda: info.candles_snapshot(symbol, interval, start_ms, end_ms), symbol)
 
 
 def to_dataframe(raw_candles, end_ms):
@@ -146,30 +128,9 @@ def first_missing_bar_ms(symbol, last_saved, interval, end_ms):
 
 
 def save_candles(tables, path):
-    """Combine tables, remove duplicates, sort, and write the file safely.
-
-    We write to a .tmp file first and then swap it in, so a crash while
-    writing can never leave a half-written candles file.
-    """
-    # Build the final table by chaining these steps, from the first line to the last
-    candles = (pd.concat(tables, ignore_index=True)  # stack all the tables into one
-                 # if the same (symbol, open_time) appears twice, keep the later (newer) copy
-                 .drop_duplicates(["symbol", "open_time"], keep="last")
-                 # order the rows by coin, then by time
-                 .sort_values(["symbol", "open_time"])
-                 # renumber the rows 0, 1, 2, ... and throw away the old numbers
-                 .reset_index(drop=True))
-
-    # Create the data folder if it does not exist yet
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # A temporary file name next to the real one (same name, ending in .tmp)
-    tmp_path = path.with_suffix(".tmp")
-    # Write the table to the temporary file first (index=False skips the row numbers)
-    candles.to_parquet(tmp_path, index=False)
-    # Swap the temporary file in only after it was fully written
-    tmp_path.replace(path)
-    # Print a summary: number of rows and number of different coins
-    print(f"saved {len(candles)} rows, {candles['symbol'].nunique()} symbols")
+    """Combine tables, remove duplicates, sort, and write the file safely."""
+    # A candle is identified by its coin and its start time
+    save_table(tables, path, ["symbol", "open_time"])
 
 
 def update_candles(data_dir: Path, interval: str) -> None:

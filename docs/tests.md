@@ -26,6 +26,33 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
 | `test_unsupported_interval_is_rejected` | An interval like `5m` raises a clear error before any request |
 
+## `tests/test_funding.py` — the funding downloader
+
+| Test | Checks |
+| ---- | ------ |
+| `test_to_dataframe_renames_columns_and_converts_types` | `coin` becomes `symbol`, rates become floats, `time` is `datetime64[us, UTC]` like the candles, the ms offset is kept |
+| `test_to_dataframe_with_no_data_returns_empty_table` | No API data gives an empty table with the right columns |
+| `test_funding_can_be_joined_to_candles_with_merge_asof` | A candle gets the latest funding row at or before its close, with no dtype error |
+| `test_download_funding_collects_every_page` | 7 rows over pages of 3 all arrive once, in order, and page 2 starts 1 ms after page 1's last row |
+| `test_download_funding_needs_one_extra_request_when_the_last_page_is_full` | 6 rows over pages of 3 need a third, empty request |
+| `test_download_funding_with_no_rows_returns_empty_table` | Nothing to download gives an empty table |
+| `test_first_missing_time_for_new_symbol_is_the_global_start` | A new symbol starts from `START_TIME_MS` |
+| `test_first_missing_time_for_saved_symbol_is_one_millisecond_later` | A saved symbol continues 1 ms after its last row |
+| `test_first_run_saves_every_symbol_sorted` | First run saves all symbols, sorted by symbol then time |
+| `test_second_run_fetches_only_new_rows_and_skips_delisted` | Update asks only for new rows, never re-fetches a saved delisted coin, and creates no duplicates |
+| `test_failed_symbol_is_left_out_and_fetched_on_the_next_run` | A failing symbol is not saved, and a rerun fills it in |
+
+## `tests/test_api_helpers.py` — shared retry and save helpers
+
+| Test | Checks |
+| ---- | ------ |
+| `test_call_with_retry_returns_the_answer_when_nothing_fails` | The answer comes back after one call |
+| `test_call_with_retry_waits_longer_after_each_429` | Waits 5s, then 10s, then succeeds |
+| `test_call_with_retry_caps_the_wait_at_60_seconds` | Waits double (5, 10, 20, 40) and then stay at 60 |
+| `test_call_with_retry_raises_other_errors_at_once` | A non-429 error is raised with no retry and no waiting |
+| `test_call_with_retry_gives_up_after_max_attempts` | Gives up after `MAX_ATTEMPTS` rate-limit errors |
+| `test_save_table_sorts_removes_duplicates_and_leaves_no_tmp_file` | Sorted by key, newer duplicate kept, folder created, no `.tmp` left |
+
 ## `tests/test_clean_candles.py` — the cleaning
 
 | Test | Checks |
@@ -39,6 +66,8 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_update_candles_cleaned_writes_file` (both intervals) | The cleaned parquet is written with the flag columns, named after the interval |
 
 ## How the downloader tests avoid the network
+
+(`test_funding.py` works the same way: its `FakeInfo` has `funding_history`, hourly rows from 2024-01-01 with a 48 ms offset, and `PAGE_SIZE` is patched to 3 so paging is tested with tiny data.)
 
 - `FakeInfo` replaces the Hyperliquid `Info` class. It has coin A (active) and coin B (delisted), each with `bars_available` bars from 2024-01-01 (the bar length follows the interval the code asks for), and it records every request in `calls`. Set `broken_symbols` to make a coin fail.
 - `RateLimitedInfo(failures=n)` raises a 429 error `n` times, then answers.

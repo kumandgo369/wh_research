@@ -31,9 +31,5 @@ Current 1d data: 176,925 of 217,560 rows kept, 0 invalid, 27 stale bars (HPOS, N
 ## Research rules
 
 - **Look-ahead.** A bar is only known at its close. In as-of joins use `close_time` as the left key, never `open_time`.
-- **Join key.** Use `symbol`. Funding data calls it `coin`, so rename on ingest.
+- **Join key.** Use `symbol`. Funding data calls it `coin` in the API; it is renamed to `symbol` when downloaded (see `5-funding_data.md`).
 - **Units.** Convert datetimes to the same dtype and unit before `merge_asof`.
-
-## TODO
-
-- [ ] Funding rate downloader and as-of join helper
