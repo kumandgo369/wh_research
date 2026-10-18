@@ -68,6 +68,26 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | `test_gap_check_uses_the_interval_length` | Bars 2 hours apart are a gap for `1h` but not for `1d` |
 | `test_update_candles_cleaned_writes_file` (both intervals) | The cleaned parquet is written with the flag columns, named after the interval |
 
+## `tests/test_daily_universe.py` — the daily universe files
+
+Daily only. The tests build flat bars (open = high = low = close = 1) so dollar volume equals volume.
+
+| Test | Checks |
+| ---- | ------ |
+| `test_first_row_is_the_31st_bar_of_a_coin` | 30 bars of history are needed, so a coin first appears on its 31st bar |
+| `test_a_spike_on_day_t_cannot_make_day_t_eligible` | The day the median reaches the cutoff is not kept; the next day is |
+| `test_the_median_ignores_one_huge_day` | One enormous day does not lift a coin into the universe |
+| `test_cutoff_is_inclusive` | A median exactly at the cutoff is kept, just below it is not |
+| `test_a_missing_bar_blocks_eligibility_until_the_window_is_full_again` | A gap blocks the bar after it and every bar whose 30-day window contains it |
+| `test_symbols_do_not_mix` | A liquid coin does not lift an illiquid one |
+| `test_dollar_volume_uses_the_typical_price` | Dollar volume is volume times (high + low + close) / 3 |
+| `test_same_day_median_column_is_not_in_the_result` | Only `adv_30d_prev` is returned, not the same-day median |
+| `test_no_look_ahead_in_the_universe` | Rows up to a cut date are identical with or without the later data, even if later volumes are multiplied by 1000 |
+| `test_filename_uses_m_for_millions_and_k_for_thousands` | `2m`, `500k`, `2500k` and the plain number |
+| `test_filename_rejects_bad_cutoffs` | Zero, negative and fractional cutoffs raise an error |
+| `test_each_cutoff_gets_its_own_file_and_a_rerun_leaves_others_alone` | Two cutoffs write two files, no `.tmp` is left, and rerunning one does not touch the other |
+| `test_update_prints_a_summary` | The printed summary has the rows, latest-day symbols and symbols ever included |
+
 ## How the downloader tests avoid the network
 
 (`test_funding.py` works the same way: its `FakeInfo` has `funding_history`, hourly rows from 2024-01-01 with a 48 ms offset, and `PAGE_SIZE` is patched to 3 so paging is tested with tiny data.)
