@@ -4,8 +4,14 @@
 
 # Steps
 
-1 - Choose a trading universe
+1 - Download data (check docs)
 
-2 - Split the data into cross validation folds
+2 - Clean data (check docs)
 
-3 - wip
+3 - Filter trading universe by 30 day rolling median dollar volume traded (check docs)
+
+4- Choose a trading universe
+
+5 - Split the data into cross validation folds
+
+6 - tbc
