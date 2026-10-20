@@ -12,6 +12,6 @@
 
 4- Choose a trading universe
 
-5 - Split the data into cross validation folds
+5 - Choose the data walk forward cross validation split and holdout set
 
 6 - tbc

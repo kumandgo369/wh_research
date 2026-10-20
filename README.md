@@ -36,7 +36,7 @@ You get `candles_1d.parquet` and `candles_1h.parquet` (raw) plus `candles_1d_cle
 
 ## Build the daily universe
 
-The daily universe keeps only the days a coin was liquid enough (30-day median dollar volume at the previous close is at least the cutoff). Give the cutoff in dollars; each cutoff gets its own file. An optional second number is a lower exit level: a coin joins at the cutoff and stays in until it falls below the exit level, so it does not flip in and out.
+The daily universe keeps every cleaned daily row and adds an `in_universe` flag: True on the days a coin was liquid enough (30-day median dollar volume at the previous close is at least the cutoff). Filter with `df[df["in_universe"]]`. Give the cutoff in dollars; each cutoff gets its own file. An optional second number is a lower exit level: a coin joins at the cutoff and stays in until it falls below the exit level, so it does not flip in and out.
 
     uv run python scripts/build_hyperliquid_daily_universe.py 2000000            # → universe_1d_min_mdv_2m.parquet
     uv run python scripts/build_hyperliquid_daily_universe.py 500000             # → universe_1d_min_mdv_500k.parquet
@@ -68,5 +68,6 @@ All tests run offline in about a second.
 - [Cleaning](docs/3-daily_data_cleaning.md): the validity, stale and gap flags
 - [Hourly data](docs/4-hourly_data.md): the 5000-bar cap, where 1h data starts, backups
 - [Funding data](docs/5-funding_data.md): schema, paging, timestamps, joining to candles
-- [Daily universe](docs/6-daily_universe.md): the liquidity filter, the no-look-ahead rule, one file per cutoff
+- [Daily universe](docs/6-daily_universe.md): the `in_universe` flag, the no-look-ahead rule, one file per cutoff
+- [Forward returns](docs/7-forward_returns.md): `add_forward_returns` labels, design decisions, avoiding leaks
 - [Tests](docs/tests.md)

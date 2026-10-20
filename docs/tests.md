@@ -70,7 +70,7 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 
 ## `tests/test_daily_universe.py` — the daily universe files
 
-Daily only. The tests build flat bars (open = high = low = close = 1) so dollar volume equals volume.
+Daily only. The tests build flat bars (open = high = low = close = 1) so dollar volume equals volume. Most tests look at the rows flagged `in_universe` (the helper `in_universe_rows`); "kept" below means flagged in.
 
 | Test | Checks |
 | ---- | ------ |
@@ -82,21 +82,43 @@ Daily only. The tests build flat bars (open = high = low = close = 1) so dollar 
 | `test_symbols_do_not_mix` | A liquid coin does not lift an illiquid one |
 | `test_dollar_volume_uses_the_typical_price` | Dollar volume is volume times (high + low + close) / 3 |
 | `test_same_day_median_column_is_not_in_the_result` | Only `mdv_30d_prev` is returned, not the same-day median |
-| `test_no_look_ahead_in_the_universe` | Rows up to a cut date are identical with or without the later data, even if later volumes are multiplied by 1000 |
+| `test_every_input_row_is_kept_and_the_series_stay_gap_free` | No row is dropped and each coin keeps one row per day |
+| `test_in_universe_is_a_true_false_column_and_false_for_the_first_30_bars` | The flag is a bool column, False for a coin's first 30 bars |
+| `test_no_look_ahead_in_the_universe` | The panel (flags and medians) up to a cut date is identical with or without the later data, even if later volumes are multiplied by 1000 |
 | `test_filename_uses_m_for_millions_and_k_for_thousands` | `2m`, `500k`, `2500k` and the plain number |
 | `test_filename_rejects_bad_cutoffs` | Zero, negative and fractional cutoffs raise an error |
-| `test_each_cutoff_gets_its_own_file_and_a_rerun_leaves_others_alone` | Two cutoffs write two files, no `.tmp` is left, and rerunning one does not touch the other |
-| `test_update_prints_a_summary` | The printed summary has the rows, latest-day symbols and symbols ever included |
+| `test_each_cutoff_gets_its_own_file_and_a_rerun_leaves_others_alone` | Two cutoffs write two files with all rows and different flags, no `.tmp` is left, and rerunning one does not touch the other |
+| `test_update_prints_a_summary` | The printed summary has the rows saved, symbols in the universe on the latest day and symbols ever in it |
 | `test_a_coin_that_is_in_stays_in_between_the_exit_and_entry_levels` | With an exit level a joined coin is kept while its median is between the levels; a single cutoff drops it |
 | `test_a_coin_between_the_levels_does_not_enter` | A coin that never reached the entry level is not kept, even above the exit level |
 | `test_a_coin_leaves_below_the_exit_level_and_needs_the_entry_level_to_return` | Leaves when the median falls below the exit level, stays out in between, returns only at the entry level |
-| `test_exit_level_equal_to_entry_level_gives_the_single_cutoff_result` | Exit equal to entry gives exactly the single-cutoff table |
+| `test_exit_level_equal_to_entry_level_gives_the_single_cutoff_result` | Exit equal to entry gives exactly the single-cutoff rows |
 | `test_a_missing_bar_resets_a_coin_even_with_an_exit_level` | A gap still blocks the coin until its window is full again |
 | `test_exit_level_state_does_not_carry_from_one_symbol_to_the_next` | A coin that is in does not make the next coin in |
 | `test_bad_exit_levels_are_rejected` | Exit above entry, zero or negative raises an error |
-| `test_no_look_ahead_with_an_exit_level` | Rows up to a cut date are identical with or without later data, even if later volumes are multiplied by 1000 |
+| `test_no_look_ahead_with_an_exit_level` | The same check with an exit level |
 | `test_filename_gets_an_exit_part_only_when_the_exit_level_is_lower` | `..._2m_exit_1m`, and no suffix for an equal or missing exit level |
 | `test_entry_exit_file_sits_next_to_the_single_cutoff_file` | Both files exist side by side, and rerunning one leaves the other untouched |
+
+## `tests/test_labels.py` — the forward-return labels
+
+The tests build tiny candle tables (only `symbol`, `bar`, `close` plus the times) with known prices, so every label can be worked out by hand.
+
+| Test | Checks |
+| ---- | ------ |
+| `test_forward_log_return_is_the_log_of_the_close_n_bars_later_over_this_close` | Closes that double give `log 2` one bar ahead and `log 4` two bars ahead, NaN at the end |
+| `test_direction_is_1_for_up_and_0_for_flat_or_down_and_nan_stays_nan` | Up = 1, flat = 0, down = 0, and a missing label is NaN, not 0 |
+| `test_the_last_n_bars_of_each_coin_have_no_label` | Exactly *n* missing returns and directions per coin |
+| `test_no_rows_are_dropped_and_the_input_is_not_changed` | Same rows, order, index and extra columns (like `in_universe`); the input table is untouched |
+| `test_coins_do_not_mix` | A coin's last bar does not borrow the next coin's first bar |
+| `test_a_missing_target_bar_gives_nan_and_a_missing_bar_in_between_does_not_matter` | A gap gives NaN where the target is missing, but a correct label when only a bar in between is missing (a row shift would get this wrong) |
+| `test_the_row_order_of_the_input_does_not_matter` | A shuffled table gets the same labels and keeps its own order |
+| `test_end_time_is_the_close_time_of_the_bar_the_label_uses` | `fwd_end_time_{n}` is the target bar's `close_time`, and `close_time + n bars` even without a label |
+| `test_hourly_bars_use_hours_as_the_unit` | On `"1h"`, *n* = 24 looks 24 hours ahead |
+| `test_several_horizons_and_a_single_number_both_work` | Three columns per horizon, and `3` gives the same as `[3]` |
+| `test_a_label_depends_only_on_its_own_close_and_the_close_n_bars_later` | Changing the bars in between or after leaves the label unchanged; changing the target bar moves it |
+| `test_bad_prices_give_nan_not_infinity` | A zero close gives NaN, never infinity |
+| `test_bad_input_is_rejected` | Unsupported interval, zero, negative or fractional horizons, and duplicate bars raise an error |
 
 ## How the downloader tests avoid the network
 

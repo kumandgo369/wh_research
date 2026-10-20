@@ -1,16 +1,19 @@
-"""Daily tradeable universe: the cleaned 1d candles, kept only on days a coin was liquid enough.
+"""Daily tradeable universe: the cleaned 1d candles with a True/False in_universe flag on every bar.
 
 Works with candles_1d_cleaned.parquet only (daily data, no interval argument).
 
-A coin's liquidity is the median of its last 30 daily dollar volumes (MDV). A row for day t is
-kept when that median, measured at the CLOSE OF DAY t-1, is at least the entry level. With a
+No row is dropped, so every coin keeps its full, gap-free series (needed for forward
+returns and for features that look back). The flag says whether the coin was liquid enough.
+
+A coin's liquidity is the median of its last 30 daily dollar volumes (MDV). The flag for day t
+is True when that median, measured at the CLOSE OF DAY t-1, is at least the entry level. With a
 lower exit level, a coin that is in stays in until its median falls below the exit level.
-So nothing from day t (or later) decides whether day t is in the file, and there is no look-ahead.
+So nothing from day t (or later) decides the flag of day t, and there is no look-ahead.
 
 Example:
     DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
     df = pd.read_parquet(DATA_DIR / "universe_1d_min_mdv_2m.parquet")
-    # every row is already tradeable on its own day, so its return can be used directly
+    universe = df[df["in_universe"]]    # the days a coin was tradeable
 """
 
 # Path builds file paths in a way that works on any operating system
@@ -61,16 +64,16 @@ def daily_universe_filename(min_mdv_usd, exit_mdv_usd=None):
     return name + ".parquet"
 
 
-def filter_daily_universe(df, min_mdv_usd, exit_mdv_usd=None):
-    """Keep the daily bars of coins that were liquid enough at the previous day's close.
+def flag_daily_universe(df, min_mdv_usd, exit_mdv_usd=None):
+    """Flag the daily bars of coins that were liquid enough at the previous day's close.
 
     A coin joins when its 30-day median dollar volume reaches min_mdv_usd (the entry level)
     and stays in until that median falls below exit_mdv_usd (the exit level). The exit level
     defaults to the entry level, which means a single cutoff.
 
-    df is the cleaned 1d table. Returns its rows that pass, with two extra columns:
-    dollar_volume (this bar's volume in dollars) and mdv_30d_prev (the 30-day median
-    dollar volume as known at the previous bar's close).
+    df is the cleaned 1d table. Returns ALL its rows (sorted by coin, then time), with three
+    extra columns: dollar_volume (this bar's volume in dollars), mdv_30d_prev (the 30-day
+    median dollar volume as known at the previous bar's close) and in_universe (True/False).
     """
     # With no exit level given, the exit level is the entry level (a single cutoff)
     if exit_mdv_usd is None:
@@ -116,10 +119,10 @@ def filter_daily_universe(df, min_mdv_usd, exit_mdv_usd=None):
     state = state.mask((mdv < exit_mdv_usd) | mdv.isna(), 0.0)
     # Between the two levels a coin keeps its last state, so carry it forward within each coin
     state = state.groupby(df["symbol"]).ffill()
-    # Keep only the bars that are in (anything still undecided, such as a coin's first bars, is out)
-    kept = df[state == 1]
-    # Hand back the kept rows without the same-day median, so it can't be used by mistake to pick day t
-    return kept.drop(columns=["mdv_30d"]).reset_index(drop=True)
+    # A bar is in the universe when its state is 1 (anything still undecided, such as a coin's first bars, is out)
+    df["in_universe"] = state == 1
+    # Hand back every row without the same-day median, so it can't be used by mistake to pick day t
+    return df.drop(columns=["mdv_30d"])
 
 
 def update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None):
@@ -131,8 +134,8 @@ def update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None):
     data_dir = Path(data_dir)
     # Read the cleaned daily candles
     df = pd.read_parquet(data_dir / "candles_1d_cleaned.parquet")
-    # Keep only the liquid-enough bars
-    universe = filter_daily_universe(df, min_mdv_usd, exit_mdv_usd)
+    # Flag the liquid-enough bars (all rows are kept)
+    universe = flag_daily_universe(df, min_mdv_usd, exit_mdv_usd)
     # Where this file will be saved, such as universe_1d_min_mdv_2m.parquet
     path = data_dir / daily_universe_filename(min_mdv_usd, exit_mdv_usd)
     # A temporary file name next to it (same name, ending in .tmp)
@@ -141,10 +144,12 @@ def update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None):
     universe.to_parquet(tmp, index=False)
     # Swap the temporary file in only after it was fully written, so a crash can't corrupt the real file
     tmp.replace(path)
+    # Only the bars that are in the universe count for the summary
+    members = universe[universe["in_universe"]]
     # The newest day in the file (empty tables have none)
     latest = universe["open_time"].max()
     # How many coins were in the universe on that newest day
-    latest_count = (universe["open_time"] == latest).sum()
-    # Print a summary: rows, coins on the latest day, and coins that were ever included
-    print(f"saved {len(universe)} rows to {path.name}, {latest_count} symbols on the latest day, "
-          f"{universe['symbol'].nunique()} symbols ever included")
+    latest_count = (members["open_time"] == latest).sum()
+    # Print a summary: rows saved, coins in the universe on the latest day, and coins that were ever in it
+    print(f"saved {len(universe)} rows to {path.name}, {latest_count} symbols in the universe on the latest day, "
+          f"{members['symbol'].nunique()} symbols ever in the universe")

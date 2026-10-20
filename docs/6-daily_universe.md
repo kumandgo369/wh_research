@@ -1,6 +1,6 @@
 # Daily universe files
 
-- **Code:** `src/wh_research/data/hyperliquid/daily_universe.py` (`filter_daily_universe(df, min_mdv_usd, exit_mdv_usd=None)`, `update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None)`, `daily_universe_filename(min_mdv_usd, exit_mdv_usd=None)`)
+- **Code:** `src/wh_research/data/hyperliquid/daily_universe.py` (`flag_daily_universe(df, min_mdv_usd, exit_mdv_usd=None)`, `update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None)`, `daily_universe_filename(min_mdv_usd, exit_mdv_usd=None)`)
 - **Runner:** `uv run python scripts/build_hyperliquid_daily_universe.py <min_mdv_usd> [<exit_mdv_usd>]`, for example `2000000` or `2000000 1000000`
 - **Input:** `data/hyperliquid/candles_1d_cleaned.parquet`
 - **Output:** one file per entry (and exit) level, `data/hyperliquid/universe_1d_min_mdv_<entry>[_exit_<exit>].parquet` (gitignored, derived)
@@ -9,7 +9,7 @@
 
 ## What a file contains
 
-The cleaned daily candles, **kept only on the days a coin was liquid enough to be in the universe**. A coin that is not liquid on a day has no row for that day, and a coin can leave and rejoin.
+**Every row of the cleaned daily candles, with a True/False `in_universe` flag.** Nothing is dropped, so every coin keeps its full, gap-free series. That matters because forward returns (see `7-forward_returns.md`) and any feature that looks back (momentum, volatility) need contiguous history. In a file with the liquid-enough rows only, a coin that left and rejoined has holes, and a shift by *n* rows would land on the wrong day.
 
 All the columns of `candles_1d_cleaned.parquet` are kept (including the `ok_*`, `is_valid`, `is_stale` and `after_gap` flags), plus:
 
@@ -17,8 +17,11 @@ All the columns of `candles_1d_cleaned.parquet` are kept (including the `ok_*`, 
 | ------ | ------- |
 | `dollar_volume` | This bar's volume in dollars: `volume * (high + low + close) / 3` (volume is in coin units) |
 | `mdv_30d_prev` | MDV: the **median** daily dollar volume (not the mean, which is what "ADV" would mean) of the 30 bars ending at the **previous** bar's close |
+| `in_universe` | `True` when the coin was liquid enough on this day (rule below); never missing |
 
-With a single cutoff, a row for day *t* is present when `mdv_30d_prev >= cutoff`, and you can use a higher cutoff in a notebook with `df[df["mdv_30d_prev"] >= higher_cutoff]`. With an entry and exit level (next section) the file also holds the days in between, so filtering it that way does not give a single-cutoff universe.
+With a single cutoff, `in_universe` is `mdv_30d_prev >= cutoff`, and a higher cutoff in a notebook is `df["mdv_30d_prev"] >= higher_cutoff`. With an entry and exit level (next section) the flag also covers the days in between, so that comparison does not give a single-cutoff universe.
+
+**Compute labels and features on the whole file first, and filter on `in_universe` afterwards** (`df[df["in_universe"]]`).
 
 ## Entry and exit levels
 
@@ -31,14 +34,14 @@ For each coin, in time order:
 - Between exit and entry: keeps its last state (a coin that is in stays in, a coin that is out stays out, so it cannot enter below the entry level).
 - No `mdv_30d_prev` (under 30 bars of history, or right after a missing bar): out, and the state starts again from out.
 
-The exit level must be above 0 and at most the entry level. An exit level equal to the entry level (or none) is the single-cutoff rule, and gives the same file name and rows as before. Like everything else it only uses `mdv_30d_prev`, so it has no look-ahead: `tests/test_daily_universe.py::test_no_look_ahead_with_an_exit_level` checks this.
+The exit level must be above 0 and at most the entry level. An exit level equal to the entry level (or none) is the single-cutoff rule, and gives the same file name and flags as a single cutoff. Like everything else it only uses `mdv_30d_prev`, so it has no look-ahead: `tests/test_daily_universe.py::test_no_look_ahead_with_an_exit_level` checks this.
 
-On the current data, entry $2M with exit $1M has 563 joins and leaves instead of 1,048 for a single $2M cutoff. It adds 11,946 rows, all with `mdv_30d_prev` between $1.0M and $2.0M, and contains every row of the single-cutoff file.
+On the current data, entry $2M with exit $1M has 563 joins and leaves instead of 1,048 for a single $2M cutoff. It flags 11,946 more rows, all with `mdv_30d_prev` between $1.0M and $2.0M, and every row flagged by the single $2M cutoff is flagged too.
 
 ## No look-ahead
 
-- Whether day *t* is in the file is decided only from bars that had **closed by the end of day *t−1***. Nothing from day *t* or later is used, and nothing is ranked or scaled against the full history.
-- So **a row's own return can be used directly**: you knew at the start of day *t* that the coin was in the universe. Do not shift the membership again.
+- The flag for day *t* is decided only from bars that had **closed by the end of day *t−1***. Nothing from day *t* or later is used, and nothing is ranked or scaled against the full history.
+- So **use the flag on the same row**: you knew at the start of day *t* that the coin was in the universe. Do not shift it again.
 - The same-day median is deliberately not stored, so it can't be used by mistake to pick day *t*.
 - The window is a trailing 30 days on `close_time` (this bar included, nothing later). Adding newer bars never changes older rows, so a rerun gives identical earlier rows.
 - `tests/test_daily_universe.py::test_no_look_ahead_in_the_universe` checks this by cutting the data and by multiplying future volumes by 1000.
@@ -46,10 +49,10 @@ On the current data, entry $2M with exit $1M has 563 joins and leaves instead of
 ## Rules
 
 - **Median, not mean.** A single spike day (a listing, a pump) does not push a coin into the universe.
-- **Minimum history.** The median needs 30 bars in its window, so a coin first appears on its **31st** cleaned bar (after the leading zero-volume bars are trimmed).
-- **Gaps.** A window with a missing bar has no median, and a bar that does not directly follow the previous one (one day earlier) is not kept. The current 1d data has no gaps.
+- **Minimum history.** The median needs 30 bars in its window, so a coin is first flagged in on its **31st** cleaned bar (after the leading zero-volume bars are trimmed).
+- **Gaps.** A window with a missing bar has no median, and a bar that does not directly follow the previous one (one day earlier) is flagged out. The current 1d data has no gaps.
 - **Stale and invalid bars** are not excluded from the median; they count with their actual volume. Filter them on the rows if you want to (`~is_stale & is_valid`).
-- **Delisted coins** are kept while they qualify, so there is no survivorship bias. A delisted coin simply stops having rows, so a backtest has to handle the exit at its last bar.
+- **Delisted coins** are flagged in while they qualify, so there is no survivorship bias. A delisted coin simply stops having rows, so a backtest has to handle the exit at its last bar.
 
 ## Many cutoffs, many files
 
@@ -62,12 +65,12 @@ On the current data, entry $2M with exit $1M has 563 joins and leaves instead of
 
     DATA_DIR = Path("path/to/data/hyperliquid")    # change to where your data folder is
     df = pd.read_parquet(DATA_DIR / "universe_1d_min_mdv_2m.parquet")
-    df["ret"] = df["close"] / df["open"] - 1       # the day's return; every row is tradeable that day
+    universe = df[df["in_universe"]]               # only the days a coin was tradeable
 
-Current 1d data (as of 2026-10-17):
+Current 1d data (as of 2026-10-17). Every file has all 177,103 cleaned rows; this counts the ones flagged `in_universe`:
 
-| Entry / exit | Rows | Symbols on the latest day | Symbols ever included |
-| ------------ | ---- | ------------------------- | --------------------- |
+| Entry / exit | Rows flagged in | Symbols in on the latest day | Symbols ever in |
+| ------------ | --------------- | ---------------------------- | --------------- |
 | $2M | 47,699 | 63 | 173 |
 | $2M / $1M | 59,645 | 65 | 173 |
 | $500k | 92,044 | 97 | 223 |
@@ -76,4 +79,4 @@ The universe grows with market activity: at $2M it had 4 coins in mid-2023, abou
 
 ## Using it with hourly data
 
-These files are for daily panels and there is no hourly universe file yet. Day *t*'s membership is known at the start of day *t* (the previous close), so it would be valid for the hourly bars that open during day *t*; build that join deliberately (match on the UTC date of the hourly `open_time`) rather than reusing these files directly.
+These files are for daily panels and there is no hourly universe file yet. Day *t*'s flag is known at the start of day *t* (the previous close), so it would be valid for the hourly bars that open during day *t*; build that join deliberately (match on the UTC date of the hourly `open_time`) rather than reusing these files directly.
