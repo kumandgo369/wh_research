@@ -1,5 +1,7 @@
 # Forward-return labels
 
+How this fits into the research steps and the leakage rules: `9-research_workflow.md`. `split_holdout` and `block_rows` in `src/wh_research/evaluation/splits.py` implement the purge below.
+
 - **Code:** `src/wh_research/data/hyperliquid/labels.py` (`add_forward_returns(df, interval, horizons)`)
 - **Works on:** the candle schema (`symbol`, `open_time`, `close_time`, `close`): raw or cleaned `candles_1d` / `candles_1h`, or a universe file. Other columns pass through.
 
