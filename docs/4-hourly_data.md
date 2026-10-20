@@ -36,4 +36,4 @@ About 907k rows for 195 symbols, 32 MB raw and 33 MB cleaned. Expect roughly 1.5
 ## Cleaning at 1h
 
 - `after_gap` uses one hour: a step between bars longer than 1 hour. Result: 0 gaps.
-- `is_stale` is still "more than 3 equal closes in a row", which at 1h means 4 flat hours. That is common for thin coins, so decide per analysis whether to exclude those bars. After the trim only 1,485 of 903,471 bars are flagged.
+- `is_stale` is still "the 4th or later equal close in a row", which at 1h means the 4th flat hour onwards. That is common for thin coins, so decide per analysis whether to exclude those bars. After the trim only about 500 of 907,000 bars are flagged.

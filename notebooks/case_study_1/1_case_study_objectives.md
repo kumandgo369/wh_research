@@ -14,4 +14,4 @@
 
 5 - Choose the data walk forward cross validation split and holdout set
 
-6 - tbc
+6 - Compute target labels

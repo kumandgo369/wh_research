@@ -19,7 +19,7 @@ import pandas as pd
 # BAR_MS says how long one bar lasts, and candles_filename gives the raw file's name
 from wh_research.data.hyperliquid.candles import BAR_MS, candles_filename
 
-# A close price that stays the same for MORE than this many bars in a row is "stale"
+# A close price that stays the same for MORE than this many bars in a row is "stale" (from the 4th bar on)
 STALE_BARS = 3
 
 
@@ -64,10 +64,10 @@ def clean_candles(df, interval):
     previous_close = df.groupby("symbol")["close"].shift()
     # Whenever the close changed, add 1 to a running count, so equal closes in a row share a number
     run_id = (df["close"] != previous_close).cumsum()
-    # Count how many bars share each run number, i.e. how long each run is
-    run_length = df.groupby(run_id)["close"].transform("size")
-    # A bar is stale when it belongs to a run longer than STALE_BARS
-    df["is_stale"] = run_length > STALE_BARS
+    # Count the bars of each run up to and including this one (1, 2, 3, ...), so later bars are never used
+    position_in_run = df.groupby(run_id).cumcount() + 1
+    # A bar is stale once it is the 4th (or later) equal close in a row, which is known at its own close
+    df["is_stale"] = position_in_run > STALE_BARS
 
     # Step 3: gap detector. Flags the first bar after one or more missing bars.
     # Get the time between each bar and the previous bar of the same coin (the first bar gets nothing)
@@ -82,7 +82,7 @@ def clean_candles(df, interval):
 def update_candles_cleaned(data_dir, interval):
     """Rebuild candles_<interval>_cleaned.parquet from candles_<interval>.parquet.
 
-    Always a full rebuild: a new bar can make earlier bars stale.
+    Always a full rebuild, which keeps it simple (the flags of old bars never change when new bars arrive).
     """
     # Make sure data_dir is a Path, even if the caller passed plain text
     data_dir = Path(data_dir)

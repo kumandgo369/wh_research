@@ -16,7 +16,7 @@
 | `ok_price` | open, high, low and close are all `> 0` |
 | `ok_volume` | `volume >= 0` |
 | `is_valid` | all five `ok_*` columns are True |
-| `is_stale` | the close is unchanged for more than 3 bars in a row (`STALE_BARS`) |
+| `is_stale` | the bar is the 4th or later bar in a row with the same close (`STALE_BARS` = 3). Only the bar itself and earlier bars decide it, so it is known at the bar's close and is safe to filter on |
 | `after_gap` | this is the first bar after one or more missing bars for that coin (a step longer than one bar of the interval) |
 
 Rows are flagged, not dropped, so the series keeps no gaps. A flat price can be a real quiet period, so you decide what to do with it.
@@ -27,7 +27,7 @@ Rows are flagged, not dropped, so the series keeps no gaps. A flat price can be 
     df = pd.read_parquet(DATA_DIR / "candles_1d_cleaned.parquet")
     good = df[df["is_valid"] & ~df["is_stale"]]
 
-Current 1d data: 176,925 of 217,560 rows kept, 0 invalid, 27 stale bars (HPOS, NFTI, PANDORA), 0 gaps. 74 mid-series zero-volume bars are kept.
+Current 1d data: 176,925 of 217,560 rows kept, 0 invalid, 9 stale bars (HPOS, NFTI, PANDORA), 0 gaps. 74 mid-series zero-volume bars are kept.
 
 ## Research rules
 

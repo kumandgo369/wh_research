@@ -81,8 +81,20 @@ def test_stale_needs_more_than_three_equal_closes():
     df = make_df([flat_bar("A", i, p) for i, p in enumerate(prices)])
     # Act: run the cleaning
     out = clean_candles(df, "1d")
-    # Assert: the run of 3 is fine, the run of 4 is stale, and the last bar is fine
-    assert list(out["is_stale"]) == [False] * 3 + [True] * 4 + [False]
+    # Assert: the run of 3 is fine, only the 4th bar of the run of 4 is stale, and the last bar is fine
+    assert list(out["is_stale"]) == [False] * 3 + [False] * 3 + [True] + [False]
+
+
+def test_a_bar_is_never_stale_because_of_later_bars():
+    # Arrange: a coin whose close stays at 1 for 6 bars
+    prices = [1, 1, 1, 1, 1, 1]
+    # Act: clean the first 3 bars alone, then clean all 6
+    short = clean_candles(make_df([flat_bar("A", i, p) for i, p in enumerate(prices[:3])]), "1d")
+    full = clean_candles(make_df([flat_bar("A", i, p) for i, p in enumerate(prices)]), "1d")
+    # Assert: the first 3 bars get the same flag whether or not the later bars exist (no look-ahead)
+    assert list(full["is_stale"].iloc[:3]) == list(short["is_stale"])
+    # Assert: bars 4 to 6 of the run are stale
+    assert list(full["is_stale"]) == [False] * 3 + [True] * 3
 
 
 def test_stale_run_does_not_cross_symbols():

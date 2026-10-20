@@ -41,6 +41,13 @@ A label looks into the future by definition. What the function guarantees is tha
        train = df[df["fwd_end_time_7"] < cut]        # label fully known before the eval period
        evaluation = df[df["close_time"] >= cut]
 
+   With several folds, apply the same rule at every boundary. A fold's evaluation rows start at `open_time >= eval_start` and also need their label to end before the next boundary (the next fold's `eval_start`, or the holdout start), otherwise they overlap it:
+
+       train = members[members["fwd_end_time_3"] < eval_start]
+       evaluation = members[(members["open_time"] >= eval_start) & (members["fwd_end_time_3"] < next_boundary)]
+
+   Use the longest horizon you label with. On the 2m/1m universe the holdout split at *n* = 7 removes 466 rows from the pre-holdout set (`notebooks/case_study_1/3_computing_labels_and_features.ipynb`). The feature lookback needs no purge, only the label horizon does. No embargo is needed in a walk-forward split, because training never uses data after the evaluation period.
+
    Split by **time** like this (or by sorting by `open_time` first). The universe files are sorted by symbol and then time, so slicing them by row position, such as `df[:int(len(df) * 0.7)]`, cuts by coin and not by date.
 4. **The last *n* bars of every coin have no label**, and for a delisted coin those are its final days before the delisting. Dropping the NaNs removes them, which hides the worst outcomes. It is small (42 of 59,645 rows at *n* = 7 in the 2m/1m universe) but real: handle delisting explicitly in a backtest.
 

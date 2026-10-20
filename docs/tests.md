@@ -62,7 +62,8 @@ Tests marked "both intervals" use `@pytest.mark.parametrize("interval", INTERVAL
 | ---- | ------ |
 | `test_drops_pre_trading_bars_but_keeps_mid_series_zero_volume` | Only bars before the first trade are removed |
 | `test_each_validity_rule` | Each OHLCV rule flags its bad row, and no row is dropped |
-| `test_stale_needs_more_than_three_equal_closes` | 3 equal closes are fine, 4 are stale |
+| `test_stale_needs_more_than_three_equal_closes` | 3 equal closes are fine; from the 4th equal close on a bar is stale |
+| `test_a_bar_is_never_stale_because_of_later_bars` | A bar gets the same flag whether or not later bars exist (no look-ahead) |
 | `test_stale_run_does_not_cross_symbols` | A flat price at the end of one coin does not carry into the next |
 | `test_after_gap_flags_first_bar_after_missing_bars` (both intervals) | Only the bar right after a missing bar is flagged, and the first bar of a coin never is |
 | `test_gap_check_uses_the_interval_length` | Bars 2 hours apart are a gap for `1h` but not for `1d` |
@@ -117,6 +118,26 @@ The tests build tiny candle tables (only `symbol`, `bar`, `close` plus the times
 | `test_hourly_bars_use_hours_as_the_unit` | On `"1h"`, *n* = 24 looks 24 hours ahead |
 | `test_several_horizons_and_a_single_number_both_work` | Three columns per horizon, and `3` gives the same as `[3]` |
 | `test_a_label_depends_only_on_its_own_close_and_the_close_n_bars_later` | Changing the bars in between or after leaves the label unchanged; changing the target bar moves it |
+| `test_bad_prices_give_nan_not_infinity` | A zero close gives NaN, never infinity |
+| `test_bad_input_is_rejected` | Unsupported interval, zero, negative or fractional horizons, and duplicate bars raise an error |
+
+## `tests/test_features.py` — the past-return features
+
+Same tiny candle tables as the label tests, so every feature can be worked out by hand.
+
+| Test | Checks |
+| ---- | ------ |
+| `test_past_log_return_is_the_log_of_this_close_over_the_close_n_bars_earlier` | Closes that double give `log 2` one bar back and `log 4` two bars back, NaN at the start |
+| `test_direction_columns_only_exist_when_asked_for` | No `past_direction_{n}` unless `direction=True` |
+| `test_direction_is_1_for_up_and_0_for_flat_or_down_and_nan_stays_nan` | Up = 1, flat = 0, down = 0, and a missing feature is NaN, not 0 |
+| `test_the_first_n_bars_of_each_coin_have_no_feature` | Exactly *n* missing returns and directions per coin |
+| `test_no_rows_are_dropped_and_the_input_is_not_changed` | Same rows, order, index and extra columns (like `in_universe`); the input table is untouched |
+| `test_coins_do_not_mix` | A coin's first bar does not borrow the previous coin's last bar |
+| `test_a_missing_source_bar_gives_nan_and_a_missing_bar_in_between_does_not_matter` | A gap gives NaN where the earlier bar is missing, but a correct value when only a bar in between is missing (a row shift would get this wrong) |
+| `test_the_row_order_of_the_input_does_not_matter` | A shuffled table gets the same features and keeps its own order |
+| `test_hourly_bars_use_hours_as_the_unit` | On `"1h"`, *n* = 24 looks 24 hours back |
+| `test_several_horizons_and_a_single_number_both_work` | A column per horizon, and `3` gives the same as `[3]` |
+| `test_a_feature_depends_only_on_its_own_close_and_the_close_n_bars_earlier` | Changing the bars in between or after (the future) leaves the feature unchanged; changing the earlier bar moves it |
 | `test_bad_prices_give_nan_not_infinity` | A zero close gives NaN, never infinity |
 | `test_bad_input_is_rejected` | Unsupported interval, zero, negative or fractional horizons, and duplicate bars raise an error |
 
