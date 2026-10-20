@@ -85,6 +85,7 @@ Daily only. The tests build flat bars (open = high = low = close = 1) so dollar 
 | `test_same_day_median_column_is_not_in_the_result` | Only `mdv_30d_prev` is returned, not the same-day median |
 | `test_every_input_row_is_kept_and_the_series_stay_gap_free` | No row is dropped and each coin keeps one row per day |
 | `test_in_universe_is_a_true_false_column_and_false_for_the_first_30_bars` | The flag is a bool column, False for a coin's first 30 bars |
+| `test_universe_size_counts_the_coins_in_the_universe_on_each_day` | Counts the distinct coins flagged `in_universe` on each day |
 | `test_no_look_ahead_in_the_universe` | The panel (flags and medians) up to a cut date is identical with or without the later data, even if later volumes are multiplied by 1000 |
 | `test_filename_uses_m_for_millions_and_k_for_thousands` | `2m`, `500k`, `2500k` and the plain number |
 | `test_filename_rejects_bad_cutoffs` | Zero, negative and fractional cutoffs raise an error |
@@ -140,6 +141,53 @@ Same tiny candle tables as the label tests, so every feature can be worked out b
 | `test_a_feature_depends_only_on_its_own_close_and_the_close_n_bars_earlier` | Changing the bars in between or after (the future) leaves the feature unchanged; changing the earlier bar moves it |
 | `test_bad_prices_give_nan_not_infinity` | A zero close gives NaN, never infinity |
 | `test_bad_input_is_rejected` | Unsupported interval, zero, negative or fractional horizons, and duplicate bars raise an error |
+
+## `tests/test_evaluation_splits.py` — holdout split and time blocks
+
+Tiny panels of coins and days with a 3-day label end time (`fwd_end_time_3`), so every kept and purged row can be counted by hand.
+
+| Test | Checks |
+| ---- | ------ |
+| `test_the_holdout_starts_at_the_train_fraction_of_the_universe_days` | 10 days, 70% train: the holdout starts on day 7 |
+| `test_days_with_no_coin_in_the_universe_do_not_count_for_the_holdout_start` | Days with nothing in the universe are ignored |
+| `test_split_holdout_has_no_overlap_and_purges_labels_that_reach_into_the_holdout` | Every pre-holdout label ends before the holdout starts; the 3 days in between are in neither set |
+| `test_split_holdout_keeps_only_universe_rows` | Rows outside the universe are dropped |
+| `test_split_holdout_keeps_rows_with_a_missing_label` | A missing label is kept (the caller decides) |
+| `test_block_rows_cut_by_date_and_purge_the_end_of_the_block` | A block starts at its start and loses the last 3 days, whose labels end after it |
+| `test_neighbouring_blocks_do_not_overlap` | No row is in two blocks |
+| `test_fold_starts_are_at_the_fractions_of_the_train_days` | 40% and 70% of 14 train days give days 5 and 9; other fractions work |
+
+## `tests/test_evaluation_ic.py` — IC, HAC test and quantiles
+
+A made-up panel (40 days, 12 coins) where the label follows the feature a little, plus hand-made single days.
+
+| Test | Checks |
+| ---- | ------ |
+| `test_the_daily_ic_is_the_spearman_correlation_across_the_coins_of_that_day` | A day's IC equals `scipy.stats.spearmanr` on that day's rows |
+| `test_days_with_too_few_coins_are_skipped` | Days under `min_symbols` coins give no IC |
+| `test_the_coin_count_ignores_missing_labels_because_those_depend_on_the_future` | A day with 10 coins that have the feature stays, even if one coin has no label |
+| `test_the_hac_test_gives_the_mean_a_standard_error_and_a_matching_confidence_interval` | Mean, t = mean / se, CI = mean ± t critical × se, the CI excludes 0 exactly when p < 0.05, and 0 lags is close to a plain t-test |
+| `test_the_hac_standard_error_is_larger_when_daily_ics_are_correlated` | With overlapping (autocorrelated) ICs the HAC standard error is wider than the plain one |
+| `test_ic_summary_has_one_row_per_pair_with_all_the_columns` | One row per feature-label pair with the 8 columns, daily IC table shape, a negated feature has the opposite IC |
+| `test_ic_by_block_uses_only_the_rows_inside_each_block_and_purges_their_end` | Each block loses its last day for a 1-day label |
+| `test_quantile_buckets_are_cut_per_day_with_the_highest_feature_in_the_last_bucket` | 10 coins in 5 buckets: two per bucket, bucket 5 holds the highest features |
+| `test_bucket_sizes_differ_by_at_most_one_coin` | 13 coins split 3, 3, 3, 2, 2 |
+| `test_a_market_wide_move_on_one_day_does_not_change_the_difference_between_quantiles` | Adding a constant to all labels of a day shifts every bucket equally |
+| `test_the_bucket_cut_does_not_depend_on_which_labels_are_missing` | A missing label changes only its own bucket, never the cut |
+| `test_the_median_ignores_one_extreme_coin_but_the_mean_does_not` | The bucket median stays at 14 while the mean is dragged up |
+| `test_quantile_tables_are_in_percent_with_one_column_per_quantile` | Percent units, 5 columns, row levels of the block table |
+| `test_the_row_order_of_the_input_does_not_matter` | A shuffled table gives identical tables |
+
+## `tests/test_evaluation_checks.py` — the data checks
+
+Made-up candles with random prices; each check must pass on correct data and **fail** on deliberately broken data.
+
+| Test | Checks |
+| ---- | ------ |
+| `test_the_median_check_passes_on_a_correct_universe_and_fails_when_the_median_is_wrong` | A doubled median is caught |
+| `test_the_history_check_fails_when_a_coin_is_flagged_in_its_first_bars` | A flag on a coin's first bar is caught |
+| `test_the_saved_column_check_passes_on_real_columns_and_fails_on_a_shifted_one` | A past return computed with the wrong shift sign is caught |
+| `test_the_split_check_fails_on_overlap_and_on_labels_reaching_into_the_holdout` | A split without the purge, and a row in both sets, are caught |
 
 ## How the downloader tests avoid the network
 

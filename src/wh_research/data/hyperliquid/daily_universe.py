@@ -125,6 +125,12 @@ def flag_daily_universe(df, min_mdv_usd, exit_mdv_usd=None):
     return df.drop(columns=["mdv_30d"])
 
 
+def universe_size(df):
+    """How many coins are in the universe on each day: a Series indexed by open_time."""
+    # Keep only the rows flagged in the universe, then count the different coins on each day
+    return df[df["in_universe"]].groupby("open_time")["symbol"].nunique()
+
+
 def update_daily_universe(data_dir, min_mdv_usd, exit_mdv_usd=None):
     """Rebuild the universe file for one entry (and optional exit) level from candles_1d_cleaned.parquet.
 

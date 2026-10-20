@@ -1,5 +1,7 @@
 # Past-return features
 
+How this fits into the research steps and the leakage rules: `9-research_workflow.md`.
+
 - **Code:** `src/wh_research/data/hyperliquid/features.py` (`add_past_returns(df, interval, horizons, direction=False)`)
 - **Works on:** the candle schema (`symbol`, `open_time`, `close_time`, `close`): raw or cleaned `candles_1d` / `candles_1h`, or a universe file. Other columns pass through.
 

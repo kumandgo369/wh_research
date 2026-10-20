@@ -5,6 +5,8 @@
 - **Input:** `data/hyperliquid/candles_1d_cleaned.parquet`
 - **Output:** one file per entry (and exit) level, `data/hyperliquid/universe_1d_min_mdv_<entry>[_exit_<exit>].parquet` (gitignored, derived)
 
+`universe_size(df)` in the same module counts the coins that are `in_universe` on each day (used in notebook 1 to compare universes).
+
 **Daily data only.** These files are made from daily bars for daily panels. There is no hourly version (see "Using it with hourly data" below).
 
 ## What a file contains
@@ -52,7 +54,7 @@ On the current data, entry $2M with exit $1M has 563 joins and leaves instead of
 - **Minimum history.** The median needs 30 bars in its window, so a coin is first flagged in on its **31st** cleaned bar (after the leading zero-volume bars are trimmed).
 - **Gaps.** A window with a missing bar has no median, and a bar that does not directly follow the previous one (one day earlier) is flagged out. The current 1d data has no gaps.
 - **Stale and invalid bars** are not excluded from the median; they count with their actual volume. Filter them on the rows if you want to (`~is_stale & is_valid`).
-- **Delisted coins** are flagged in while they qualify, so there is no survivorship bias. A delisted coin simply stops having rows, so a backtest has to handle the exit at its last bar.
+- **Delisted coins** are flagged in while they qualify, so the flag itself does not drop them. But a delisted coin simply stops having rows: its last *n* forward-return labels are missing and silently drop out of an analysis, and its delisting return is never observed. That is a survivorship effect that the flag cannot remove, so a backtest has to handle the exit at the coin's last bar (see `10-case_study_1_audit.md`).
 
 ## Many cutoffs, many files
 

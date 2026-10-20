@@ -11,6 +11,7 @@ from wh_research.data.hyperliquid.candles import BAR_MS
 from wh_research.data.hyperliquid.daily_universe import (
     daily_universe_filename,
     flag_daily_universe,
+    universe_size,
     update_daily_universe,
 )
 
@@ -387,3 +388,16 @@ def test_in_universe_is_a_true_false_column_and_false_for_the_first_30_bars():
     assert result["in_universe"].dtype == bool
     # Assert: the first 30 bars are False (not enough history), and the rest are True
     assert list(result["in_universe"]) == [False] * 30 + [True] * 10
+
+
+def test_universe_size_counts_the_coins_in_the_universe_on_each_day():
+    # Arrange: two coins on two days, coin B is only in the universe on day 1
+    df = pd.DataFrame({
+        "symbol": ["A", "B", "A", "B"],
+        "open_time": pd.to_datetime(["2024-01-01", "2024-01-01", "2024-01-02", "2024-01-02"], utc=True),
+        "in_universe": [True, False, True, True],
+    })
+    # Act: count the coins per day
+    size = universe_size(df)
+    # Assert: one coin on the first day, two on the second
+    assert list(size) == [1, 2]
